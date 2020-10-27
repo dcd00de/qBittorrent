@@ -392,7 +392,7 @@ void TorrentHandleImpl::replaceTrackers(const QVector<TrackerEntry> &trackers)
 
         // Clear the peer list if it's a private torrent since
         // we do not want to keep connecting with peers from old tracker.
-        if (isPrivate())
+        //if (isPrivate())
             //clearPeers();
     }
 }
