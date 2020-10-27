@@ -1,9 +1,9 @@
 qBittorrent - A BitTorrent client in Qt
 ------------------------------------------
 
-[![TravisCI Status](https://travis-ci.org/dcd00de/qBittorrent.svg?branch=master)](https://travis-ci.org/qbittorrent/qBittorrent)
-[![AppVeyor Status](https://ci.appveyor.com/api/projects/status/github/dcd00de/qBittorrent?branch=master&svg=true)](https://ci.appveyor.com/project/qbittorrent/qBittorrent)
-[![GitHub Actions CI Status](https://github.com/dcd00de/qBittorrent/workflows/GitHub%20Actions%20CI/badge.svg)](https://github.com/qbittorrent/qBittorrent/actions)
+[![TravisCI Status](https://travis-ci.org/dcd00de/qBittorrent.svg?branch=master)](https://travis-ci.org/dcd00de/qBittorrent)
+[![AppVeyor Status](https://ci.appveyor.com/api/projects/status/github/dcd00de/qBittorrent?branch=master&svg=true)](https://ci.appveyor.com/project/dcd00de/qBittorrent)
+[![GitHub Actions CI Status](https://github.com/dcd00de/qBittorrent/workflows/GitHub%20Actions%20CI/badge.svg)](https://github.com/dcd00de/qBittorrent/actions)
 ********************************
 ### Description:
 qBittorrent is a bittorrent client programmed in C++ / Qt that uses
