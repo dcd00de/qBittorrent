@@ -57,3 +57,6 @@ build_script:
   - jom -j2 -f Makefile.Release
 
 test: off
+
+artifacts:
+  - path: '**\*.exe'
