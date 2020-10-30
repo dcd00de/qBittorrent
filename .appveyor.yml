@@ -59,4 +59,5 @@ build_script:
 test: off
 
 artifacts:
-  - path: '**\*.exe','**\*.dll'
+  - path: '**\*.exe'
+  - path: '**\*.dll'
