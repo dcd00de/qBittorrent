@@ -60,4 +60,3 @@ test: off
 
 artifacts:
   - path: '**\*.exe'
-  - path: '**\*.dll'
