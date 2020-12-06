@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 AC_INIT([qbittorrent], [v4.4.0alpha], [bugs.qbittorrent.org], [], [https://www.qbittorrent.org/])
+=======
+AC_INIT([qbittorrent], [v4.3.1], [bugs.qbittorrent.org], [], [https://www.qbittorrent.org/])
+>>>>>>> upstream/v4_3_x
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([m4])
 AC_PROG_CC

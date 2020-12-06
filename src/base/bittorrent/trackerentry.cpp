@@ -107,7 +107,12 @@ void TrackerEntry::setTier(const int value)
 int TrackerEntry::numSeeds() const
 {
     int value = -1;
+<<<<<<< HEAD
     for (const lt::announce_endpoint &endpoint : nativeEntry().endpoints) {
+=======
+    for (const lt::announce_endpoint &endpoint : nativeEntry().endpoints)
+    {
+>>>>>>> upstream/v4_3_x
 #if (LIBTORRENT_VERSION_NUM >= 20000)
         for (const lt::announce_infohash &infoHash : endpoint.info_hashes)
             value = std::max(value, infoHash.scrape_complete);
@@ -121,7 +126,12 @@ int TrackerEntry::numSeeds() const
 int TrackerEntry::numLeeches() const
 {
     int value = -1;
+<<<<<<< HEAD
     for (const lt::announce_endpoint &endpoint : nativeEntry().endpoints) {
+=======
+    for (const lt::announce_endpoint &endpoint : nativeEntry().endpoints)
+    {
+>>>>>>> upstream/v4_3_x
 #if (LIBTORRENT_VERSION_NUM >= 20000)
         for (const lt::announce_infohash &infoHash : endpoint.info_hashes)
             value = std::max(value, infoHash.scrape_incomplete);
@@ -135,7 +145,12 @@ int TrackerEntry::numLeeches() const
 int TrackerEntry::numDownloaded() const
 {
     int value = -1;
+<<<<<<< HEAD
     for (const lt::announce_endpoint &endpoint : nativeEntry().endpoints) {
+=======
+    for (const lt::announce_endpoint &endpoint : nativeEntry().endpoints)
+    {
+>>>>>>> upstream/v4_3_x
 #if (LIBTORRENT_VERSION_NUM >= 20000)
         for (const lt::announce_infohash &infoHash : endpoint.info_hashes)
             value = std::max(value, infoHash.scrape_downloaded);

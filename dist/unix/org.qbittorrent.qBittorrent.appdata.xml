@@ -74,6 +74,10 @@
   <url type="translate">https://github.com/qbittorrent/qBittorrent/wiki/How-to-translate-qBittorrent</url>
   <content_rating type="oars-1.1"/>
   <releases>
+<<<<<<< HEAD
     <release version="4.4.0" date="2020-10-18"/>
+=======
+    <release version="4.3.1" date="2020-11-25"/>
+>>>>>>> upstream/v4_3_x
   </releases>
 </component>
