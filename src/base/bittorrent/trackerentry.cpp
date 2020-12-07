@@ -108,11 +108,16 @@ int TrackerEntry::numSeeds() const
 {
     int value = -1;
 <<<<<<< HEAD
+<<<<<<< HEAD
     for (const lt::announce_endpoint &endpoint : nativeEntry().endpoints) {
 =======
     for (const lt::announce_endpoint &endpoint : nativeEntry().endpoints)
     {
 >>>>>>> upstream/v4_3_x
+=======
+    for (const lt::announce_endpoint &endpoint : nativeEntry().endpoints)
+    {
+>>>>>>> 3485ad39d9729e9ca106191b0e02719b46f5cfd8
 #if (LIBTORRENT_VERSION_NUM >= 20000)
         for (const lt::announce_infohash &infoHash : endpoint.info_hashes)
             value = std::max(value, infoHash.scrape_complete);
@@ -127,11 +132,16 @@ int TrackerEntry::numLeeches() const
 {
     int value = -1;
 <<<<<<< HEAD
+<<<<<<< HEAD
     for (const lt::announce_endpoint &endpoint : nativeEntry().endpoints) {
 =======
     for (const lt::announce_endpoint &endpoint : nativeEntry().endpoints)
     {
 >>>>>>> upstream/v4_3_x
+=======
+    for (const lt::announce_endpoint &endpoint : nativeEntry().endpoints)
+    {
+>>>>>>> 3485ad39d9729e9ca106191b0e02719b46f5cfd8
 #if (LIBTORRENT_VERSION_NUM >= 20000)
         for (const lt::announce_infohash &infoHash : endpoint.info_hashes)
             value = std::max(value, infoHash.scrape_incomplete);
@@ -146,11 +156,16 @@ int TrackerEntry::numDownloaded() const
 {
     int value = -1;
 <<<<<<< HEAD
+<<<<<<< HEAD
     for (const lt::announce_endpoint &endpoint : nativeEntry().endpoints) {
 =======
     for (const lt::announce_endpoint &endpoint : nativeEntry().endpoints)
     {
 >>>>>>> upstream/v4_3_x
+=======
+    for (const lt::announce_endpoint &endpoint : nativeEntry().endpoints)
+    {
+>>>>>>> 3485ad39d9729e9ca106191b0e02719b46f5cfd8
 #if (LIBTORRENT_VERSION_NUM >= 20000)
         for (const lt::announce_infohash &infoHash : endpoint.info_hashes)
             value = std::max(value, infoHash.scrape_downloaded);

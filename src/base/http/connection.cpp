@@ -69,11 +69,16 @@ void Connection::read()
         {
                 const long bufferLimit = RequestParser::MAX_CONTENT_SIZE * 1.1;  // some margin for headers
 <<<<<<< HEAD
+<<<<<<< HEAD
                 if (m_receivedData.size() > bufferLimit) {
 =======
                 if (m_receivedData.size() > bufferLimit)
                 {
 >>>>>>> upstream/v4_3_x
+=======
+                if (m_receivedData.size() > bufferLimit)
+                {
+>>>>>>> 3485ad39d9729e9ca106191b0e02719b46f5cfd8
                     Logger::instance()->addMessage(tr("Http request size exceeds limitation, closing socket. Limit: %1, IP: %2")
                         .arg(bufferLimit).arg(m_socket->peerAddress().toString()), Log::WARNING);
 

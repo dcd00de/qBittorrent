@@ -11,7 +11,11 @@ jobs:
   check_file_health:
     name: Check file health
 
+<<<<<<< HEAD
     runs-on: ubuntu-latest
+=======
+    runs-on: ubuntu-20.04
+>>>>>>> 3485ad39d9729e9ca106191b0e02719b46f5cfd8
 
     steps:
     - name: checkout repository

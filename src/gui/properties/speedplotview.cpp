@@ -28,9 +28,12 @@
 
 #include "speedplotview.h"
 
+#include <cmath>
+
 #include <QLocale>
 #include <QPainter>
 #include <QPen>
+
 #include "base/global.h"
 #include "base/unicodestrings.h"
 #include "base/utils/misc.h"
@@ -85,6 +88,7 @@ namespace
             calculatedUnit = static_cast<SizeUnit>(static_cast<int>(calculatedUnit) + 1);
         }
 
+<<<<<<< HEAD
         if (value > 100.0)
         {
             int roundedValue = static_cast<int>(value / 40) * 40;
@@ -99,6 +103,18 @@ namespace
             while (roundedValue < value)
                 roundedValue += 4;
             return {static_cast<double>(roundedValue), calculatedUnit};
+=======
+        if (value > 100)
+        {
+            const double roundedValue {std::ceil(value / 40) * 40};
+            return {roundedValue, calculatedUnit};
+        }
+
+        if (value > 10)
+        {
+            const double roundedValue {std::ceil(value / 4) * 4};
+            return {roundedValue, calculatedUnit};
+>>>>>>> 3485ad39d9729e9ca106191b0e02719b46f5cfd8
         }
 
         for (const auto &roundedValue : roundingTable)

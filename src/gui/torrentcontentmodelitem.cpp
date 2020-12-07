@@ -112,6 +112,7 @@ QString TorrentContentModelItem::displayData(const int column) const
     case COL_NAME:
         return m_name;
     case COL_PRIO:
+<<<<<<< HEAD
     {
             switch (m_priority)
             {
@@ -134,11 +135,31 @@ QString TorrentContentModelItem::displayData(const int column) const
                    ? QString::fromLatin1("100%")
                    : (Utils::String::fromDouble(progress, 1) + QLatin1Char('%'));
         }
+=======
+        switch (m_priority)
+        {
+        case BitTorrent::DownloadPriority::Mixed:
+            return tr("Mixed", "Mixed (priorities");
+        case BitTorrent::DownloadPriority::Ignored:
+            return tr("Not downloaded");
+        case BitTorrent::DownloadPriority::High:
+            return tr("High", "High (priority)");
+        case BitTorrent::DownloadPriority::Maximum:
+            return tr("Maximum", "Maximum (priority)");
+        default:
+            return tr("Normal", "Normal (priority)");
+        }
+    case COL_PROGRESS:
+        return (m_progress >= 1)
+               ? QString::fromLatin1("100%")
+               : (Utils::String::fromDouble((m_progress * 100), 1) + QLatin1Char('%'));
+>>>>>>> 3485ad39d9729e9ca106191b0e02719b46f5cfd8
     case COL_SIZE:
         return Utils::Misc::friendlyUnit(m_size);
     case COL_REMAINING:
         return Utils::Misc::friendlyUnit(remaining());
     case COL_AVAILABILITY:
+<<<<<<< HEAD
     {
             const int avail = availability();
             if (avail < 0)
@@ -148,6 +169,17 @@ QString TorrentContentModelItem::displayData(const int column) const
                                   ? QString::fromLatin1("100")
                                   : Utils::String::fromDouble((avail * 100), 1);
             return QString {value + C_THIN_SPACE + QLatin1Char('%')};
+=======
+        {
+            const qreal avail = availability();
+            if (avail < 0)
+                return tr("N/A");
+
+            const QString value = (avail >= 1)
+                                  ? QString::fromLatin1("100")
+                                  : Utils::String::fromDouble((avail * 100), 1);
+            return {value + C_THIN_SPACE + QLatin1Char('%')};
+>>>>>>> 3485ad39d9729e9ca106191b0e02719b46f5cfd8
         }
     default:
         Q_ASSERT(false);
