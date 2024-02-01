@@ -667,8 +667,8 @@ void TorrentImpl::replaceTrackers(QVector<TrackerEntry> trackers)
 
     // Clear the peer list if it's a private torrent since
     // we do not want to keep connecting with peers from old tracker.
-    if (isPrivate())
-        clearPeers();
+    //if (isPrivate())
+    //    clearPeers();
 
     deferredRequestResumeData();
     m_session->handleTorrentTrackersChanged(this);
