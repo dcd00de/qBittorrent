@@ -32,16 +32,23 @@ add_library(qbt_base STATIC
     bittorrent/session.h
     bittorrent/sessionimpl.h
     bittorrent/sessionstatus.h
+    bittorrent/sharelimitaction.h
     bittorrent/speedmonitor.h
+    bittorrent/sslparameters.h
     bittorrent/torrent.h
     bittorrent/torrentcontenthandler.h
     bittorrent/torrentcontentlayout.h
+    bittorrent/torrentcontentremoveoption.h
+    bittorrent/torrentcontentremover.h
+    bittorrent/torrentcreationmanager.h
+    bittorrent/torrentcreationtask.h
     bittorrent/torrentcreator.h
     bittorrent/torrentdescriptor.h
     bittorrent/torrentimpl.h
     bittorrent/torrentinfo.h
     bittorrent/tracker.h
     bittorrent/trackerentry.h
+    bittorrent/trackerentrystatus.h
     concepts/explicitlyconvertibleto.h
     concepts/stringable.h
     digest32.h
@@ -102,9 +109,11 @@ add_library(qbt_base STATIC
     utils/io.h
     utils/misc.h
     utils/net.h
+    utils/number.h
     utils/os.h
     utils/password.h
     utils/random.h
+    utils/sslkey.h
     utils/string.h
     utils/thread.h
     utils/version.h
@@ -135,14 +144,19 @@ add_library(qbt_base STATIC
     bittorrent/resumedatastorage.cpp
     bittorrent/sessionimpl.cpp
     bittorrent/speedmonitor.cpp
+    bittorrent/sslparameters.cpp
     bittorrent/torrent.cpp
     bittorrent/torrentcontenthandler.cpp
+    bittorrent/torrentcontentremover.cpp
+    bittorrent/torrentcreationmanager.cpp
+    bittorrent/torrentcreationtask.cpp
     bittorrent/torrentcreator.cpp
     bittorrent/torrentdescriptor.cpp
     bittorrent/torrentimpl.cpp
     bittorrent/torrentinfo.cpp
     bittorrent/tracker.cpp
     bittorrent/trackerentry.cpp
+    bittorrent/trackerentrystatus.cpp
     exceptions.cpp
     http/connection.cpp
     http/httperror.cpp
@@ -191,9 +205,11 @@ add_library(qbt_base STATIC
     utils/io.cpp
     utils/misc.cpp
     utils/net.cpp
+    utils/number.cpp
     utils/os.cpp
     utils/password.cpp
     utils/random.cpp
+    utils/sslkey.cpp
     utils/string.cpp
     utils/thread.cpp
     utils/version.cpp
@@ -225,7 +241,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
         ${IOKit_LIBRARY}
     )
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    target_link_libraries(qbt_base PRIVATE Iphlpapi)
+    target_link_libraries(qbt_base PRIVATE Iphlpapi PowrProf)
 endif()
 
 if (NOT GUI)

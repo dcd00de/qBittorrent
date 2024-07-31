@@ -1,7 +1,7 @@
 /*
  * Bittorrent Client using Qt and libtorrent.
+ * Copyright (C) 2023-2024  Vladimir Golovnev <glassez@yandex.ru>
  * Copyright (C) 2024  Jonathan Ketchker
- * Copyright (C) 2023  Vladimir Golovnev <glassez@yandex.ru>
  * Copyright (C) 2006  Christophe Dumez <chris@qbittorrent.org>
  *
  * This program is free software; you can redistribute it and/or
@@ -45,6 +45,7 @@
 #include <QTranslator>
 
 #include "base/bittorrent/session.h"
+#include "base/bittorrent/sharelimitaction.h"
 #include "base/exceptions.h"
 #include "base/global.h"
 #include "base/net/portforwarder.h"
@@ -61,6 +62,7 @@
 #include "base/utils/os.h"
 #include "base/utils/password.h"
 #include "base/utils/random.h"
+#include "base/utils/sslkey.h"
 #include "addnewtorrentdialog.h"
 #include "advancedsettings.h"
 #include "banlistoptionsdialog.h"
@@ -251,17 +253,17 @@ void OptionsDialog::loadBehaviorTabOptions()
     m_ui->comboHideZero->setCurrentIndex(pref->getHideZeroComboValues());
     m_ui->comboHideZero->setEnabled(m_ui->checkHideZero->isChecked());
 
-    m_ui->actionTorrentDlOnDblClBox->setItemData(0, TOGGLE_PAUSE);
+    m_ui->actionTorrentDlOnDblClBox->setItemData(0, TOGGLE_STOP);
     m_ui->actionTorrentDlOnDblClBox->setItemData(1, OPEN_DEST);
     m_ui->actionTorrentDlOnDblClBox->setItemData(2, PREVIEW_FILE);
     m_ui->actionTorrentDlOnDblClBox->setItemData(3, SHOW_OPTIONS);
     m_ui->actionTorrentDlOnDblClBox->setItemData(4, NO_ACTION);
     int actionDownloading = pref->getActionOnDblClOnTorrentDl();
     if ((actionDownloading < 0) || (actionDownloading >= m_ui->actionTorrentDlOnDblClBox->count()))
-        actionDownloading = TOGGLE_PAUSE;
+        actionDownloading = TOGGLE_STOP;
     m_ui->actionTorrentDlOnDblClBox->setCurrentIndex(m_ui->actionTorrentDlOnDblClBox->findData(actionDownloading));
 
-    m_ui->actionTorrentFnOnDblClBox->setItemData(0, TOGGLE_PAUSE);
+    m_ui->actionTorrentFnOnDblClBox->setItemData(0, TOGGLE_STOP);
     m_ui->actionTorrentFnOnDblClBox->setItemData(1, OPEN_DEST);
     m_ui->actionTorrentFnOnDblClBox->setItemData(2, PREVIEW_FILE);
     m_ui->actionTorrentFnOnDblClBox->setItemData(3, SHOW_OPTIONS);
@@ -279,7 +281,6 @@ void OptionsDialog::loadBehaviorTabOptions()
     m_ui->checkShowSplash->setChecked(!pref->isSplashScreenDisabled());
     m_ui->checkProgramExitConfirm->setChecked(pref->confirmOnExit());
     m_ui->checkProgramAutoExitConfirm->setChecked(!pref->dontConfirmAutoExit());
-    m_ui->checkConfirmPauseAndResumeAll->setChecked(pref->confirmPauseAndResumeAll());
 
     m_ui->windowStateComboBox->addItem(tr("Normal"), QVariant::fromValue(WindowState::Normal));
     m_ui->windowStateComboBox->addItem(tr("Minimized"), QVariant::fromValue(WindowState::Minimized));
@@ -379,7 +380,6 @@ void OptionsDialog::loadBehaviorTabOptions()
     connect(m_ui->checkShowSplash, &QAbstractButton::toggled, this, &ThisType::enableApplyButton);
     connect(m_ui->checkProgramExitConfirm, &QAbstractButton::toggled, this, &ThisType::enableApplyButton);
     connect(m_ui->checkProgramAutoExitConfirm, &QAbstractButton::toggled, this, &ThisType::enableApplyButton);
-    connect(m_ui->checkConfirmPauseAndResumeAll, &QAbstractButton::toggled, this, &ThisType::enableApplyButton);
     connect(m_ui->checkShowSystray, &QGroupBox::toggled, this, &ThisType::enableApplyButton);
     connect(m_ui->checkMinimizeToSysTray, &QAbstractButton::toggled, this, &ThisType::enableApplyButton);
     connect(m_ui->checkCloseToSystray, &QAbstractButton::toggled, this, &ThisType::enableApplyButton);
@@ -462,7 +462,6 @@ void OptionsDialog::saveBehaviorTabOptions() const
     pref->setSplashScreenDisabled(isSplashScreenDisabled());
     pref->setConfirmOnExit(m_ui->checkProgramExitConfirm->isChecked());
     pref->setDontConfirmAutoExit(!m_ui->checkProgramAutoExitConfirm->isChecked());
-    pref->setConfirmPauseAndResumeAll(m_ui->checkConfirmPauseAndResumeAll->isChecked());
 
 #ifdef Q_OS_WIN
     pref->setWinStartup(WinStartup());
@@ -520,7 +519,7 @@ void OptionsDialog::loadDownloadsTabOptions()
 
     m_ui->contentLayoutComboBox->setCurrentIndex(static_cast<int>(session->torrentContentLayout()));
     m_ui->checkAddToQueueTop->setChecked(session->isAddTorrentToQueueTop());
-    m_ui->checkStartPaused->setChecked(session->isAddTorrentPaused());
+    m_ui->checkAddStopped->setChecked(session->isAddTorrentStopped());
 
     m_ui->stopConditionComboBox->setToolTip(
                 u"<html><body><p><b>" + tr("None") + u"</b> - " + tr("No stop condition is set.") + u"</p><p><b>" +
@@ -532,8 +531,8 @@ void OptionsDialog::loadDownloadsTabOptions()
     m_ui->stopConditionComboBox->setItemData(1, QVariant::fromValue(BitTorrent::Torrent::StopCondition::MetadataReceived));
     m_ui->stopConditionComboBox->setItemData(2, QVariant::fromValue(BitTorrent::Torrent::StopCondition::FilesChecked));
     m_ui->stopConditionComboBox->setCurrentIndex(m_ui->stopConditionComboBox->findData(QVariant::fromValue(session->torrentStopCondition())));
-    m_ui->stopConditionLabel->setEnabled(!m_ui->checkStartPaused->isChecked());
-    m_ui->stopConditionComboBox->setEnabled(!m_ui->checkStartPaused->isChecked());
+    m_ui->stopConditionLabel->setEnabled(!m_ui->checkAddStopped->isChecked());
+    m_ui->stopConditionComboBox->setEnabled(!m_ui->checkAddStopped->isChecked());
 
     m_ui->checkMergeTrackers->setChecked(session->isMergeTrackersEnabled());
     m_ui->checkConfirmMergeTrackers->setEnabled(m_ui->checkAdditionDialog->isChecked());
@@ -653,8 +652,8 @@ void OptionsDialog::loadDownloadsTabOptions()
     connect(m_ui->contentLayoutComboBox, qComboBoxCurrentIndexChanged, this, &ThisType::enableApplyButton);
 
     connect(m_ui->checkAddToQueueTop, &QAbstractButton::toggled, this, &ThisType::enableApplyButton);
-    connect(m_ui->checkStartPaused, &QAbstractButton::toggled, this, &ThisType::enableApplyButton);
-    connect(m_ui->checkStartPaused, &QAbstractButton::toggled, this, [this](const bool checked)
+    connect(m_ui->checkAddStopped, &QAbstractButton::toggled, this, &ThisType::enableApplyButton);
+    connect(m_ui->checkAddStopped, &QAbstractButton::toggled, this, [this](const bool checked)
     {
         m_ui->stopConditionLabel->setEnabled(!checked);
         m_ui->stopConditionComboBox->setEnabled(!checked);
@@ -706,6 +705,11 @@ void OptionsDialog::loadDownloadsTabOptions()
     connect(m_ui->groupMailNotifAuth, &QGroupBox::toggled, this, &ThisType::enableApplyButton);
     connect(m_ui->mailNotifUsername, &QLineEdit::textChanged, this, &ThisType::enableApplyButton);
     connect(m_ui->mailNotifPassword, &QLineEdit::textChanged, this, &ThisType::enableApplyButton);
+    connect(m_ui->sendTestEmail, &QPushButton::clicked, this, [this]
+    {
+        app()->sendTestEmail();
+        QMessageBox::information(this, tr("Test email"), tr("Attempted to send email. Check your inbox to confirm success"));
+    });
 
     connect(m_ui->groupBoxRunOnAdded, &QGroupBox::toggled, this, &ThisType::enableApplyButton);
     connect(m_ui->lineEditRunOnAdded, &QLineEdit::textChanged, this, &ThisType::enableApplyButton);
@@ -725,7 +729,7 @@ void OptionsDialog::saveDownloadsTabOptions() const
     session->setTorrentContentLayout(static_cast<BitTorrent::TorrentContentLayout>(m_ui->contentLayoutComboBox->currentIndex()));
 
     session->setAddTorrentToQueueTop(m_ui->checkAddToQueueTop->isChecked());
-    session->setAddTorrentPaused(addTorrentsInPause());
+    session->setAddTorrentStopped(addTorrentsStopped());
     session->setTorrentStopCondition(m_ui->stopConditionComboBox->currentData().value<BitTorrent::Torrent::StopCondition>());
     TorrentFileGuard::setAutoDeleteMode(!m_ui->deleteTorrentBox->isChecked() ? TorrentFileGuard::Never
                              : !m_ui->deleteCancelledTorrentBox->isChecked() ? TorrentFileGuard::IfAdded
@@ -1104,14 +1108,14 @@ void OptionsDialog::loadBittorrentTabOptions()
     }
     m_ui->comboRatioLimitAct->setEnabled((session->globalMaxSeedingMinutes() >= 0) || (session->globalMaxRatio() >= 0.) || (session->globalMaxInactiveSeedingMinutes() >= 0));
 
-    const QHash<MaxRatioAction, int> actIndex =
+    const QHash<BitTorrent::ShareLimitAction, int> actIndex =
     {
-        {Pause, 0},
-        {Remove, 1},
-        {DeleteFiles, 2},
-        {EnableSuperSeeding, 3}
+                                                               {BitTorrent::ShareLimitAction::Stop, 0},
+        {BitTorrent::ShareLimitAction::Remove, 1},
+        {BitTorrent::ShareLimitAction::RemoveWithContent, 2},
+        {BitTorrent::ShareLimitAction::EnableSuperSeeding, 3}
     };
-    m_ui->comboRatioLimitAct->setCurrentIndex(actIndex.value(session->maxRatioAction()));
+    m_ui->comboRatioLimitAct->setCurrentIndex(actIndex.value(session->shareLimitAction()));
 
     m_ui->checkEnableAddTrackers->setChecked(session->isAddTrackersEnabled());
     m_ui->textTrackers->setPlainText(session->additionalTrackers());
@@ -1175,14 +1179,14 @@ void OptionsDialog::saveBittorrentTabOptions() const
     session->setGlobalMaxRatio(getMaxRatio());
     session->setGlobalMaxSeedingMinutes(getMaxSeedingMinutes());
     session->setGlobalMaxInactiveSeedingMinutes(getMaxInactiveSeedingMinutes());
-    const QVector<MaxRatioAction> actIndex =
+    const QList<BitTorrent::ShareLimitAction> actIndex =
     {
-        Pause,
-        Remove,
-        DeleteFiles,
-        EnableSuperSeeding
+        BitTorrent::ShareLimitAction::Stop,
+        BitTorrent::ShareLimitAction::Remove,
+        BitTorrent::ShareLimitAction::RemoveWithContent,
+        BitTorrent::ShareLimitAction::EnableSuperSeeding
     };
-    session->setMaxRatioAction(actIndex.value(m_ui->comboRatioLimitAct->currentIndex()));
+    session->setShareLimitAction(actIndex.value(m_ui->comboRatioLimitAct->currentIndex()));
 
     session->setAddTrackersEnabled(m_ui->checkEnableAddTrackers->isChecked());
     session->setAdditionalTrackers(m_ui->textTrackers->toPlainText());
@@ -1379,13 +1383,11 @@ void OptionsDialog::saveWebUITabOptions() const
 void OptionsDialog::initializeLanguageCombo()
 {
     // List language files
-    const QDir langDir(u":/lang"_s);
-    const QStringList langFiles = langDir.entryList(QStringList(u"qbittorrent_*.qm"_s), QDir::Files);
+    const QStringList langFiles = QDir(u":/lang"_s).entryList({u"qbittorrent_*.qm"_s}, QDir::Files, QDir::Name);
     for (const QString &langFile : langFiles)
     {
-        const QString localeStr = langFile.section(u"_"_s, 1, -1).section(u"."_s, 0, 0); // remove "qbittorrent_" and ".qm"
-        m_ui->comboI18n->addItem(/*QIcon(":/icons/flags/"+country+".svg"), */ Utils::Misc::languageToLocalizedString(localeStr), localeStr);
-        qDebug() << "Supported locale:" << localeStr;
+        const QString langCode = QStringView(langFile).sliced(12).chopped(3).toString(); // remove "qbittorrent_" and ".qm"
+        m_ui->comboI18n->addItem(Utils::Misc::languageToLocalizedString(langCode), langCode);
     }
 }
 
@@ -1682,9 +1684,9 @@ bool OptionsDialog::preAllocateAllFiles() const
     return m_ui->checkPreallocateAll->isChecked();
 }
 
-bool OptionsDialog::addTorrentsInPause() const
+bool OptionsDialog::addTorrentsStopped() const
 {
-    return m_ui->checkStartPaused->isChecked();
+    return m_ui->checkAddStopped->isChecked();
 }
 
 // Proxy settings
@@ -1867,7 +1869,7 @@ Path OptionsDialog::getFilter() const
 void OptionsDialog::webUIHttpsCertChanged(const Path &path)
 {
     const auto readResult = Utils::IO::readFile(path, Utils::Net::MAX_SSL_FILE_SIZE);
-    const bool isCertValid = Utils::Net::isSSLCertificatesValid(readResult.value_or(QByteArray()));
+    const bool isCertValid = !Utils::SSLKey::load(readResult.value_or(QByteArray())).isNull();
 
     m_ui->textWebUIHttpsCert->setSelectedPath(path);
     m_ui->lblSslCertStatus->setPixmap(UIThemeManager::instance()->getScaledPixmap(
@@ -1877,7 +1879,7 @@ void OptionsDialog::webUIHttpsCertChanged(const Path &path)
 void OptionsDialog::webUIHttpsKeyChanged(const Path &path)
 {
     const auto readResult = Utils::IO::readFile(path, Utils::Net::MAX_SSL_FILE_SIZE);
-    const bool isKeyValid = Utils::Net::isSSLKeyValid(readResult.value_or(QByteArray()));
+    const bool isKeyValid = !Utils::SSLKey::load(readResult.value_or(QByteArray())).isNull();
 
     m_ui->textWebUIHttpsKey->setSelectedPath(path);
     m_ui->lblSslKeyStatus->setPixmap(UIThemeManager::instance()->getScaledPixmap(

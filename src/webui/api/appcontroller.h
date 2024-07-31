@@ -48,6 +48,8 @@ private slots:
     void preferencesAction();
     void setPreferencesAction();
     void defaultSavePathAction();
+    void sendTestEmailAction();
+    void getDirectoryContentAction();
 
     void networkInterfaceListAction();
     void networkInterfaceAddressListAction();

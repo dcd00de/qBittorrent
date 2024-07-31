@@ -1,6 +1,6 @@
 /*
  * Bittorrent Client using Qt and libtorrent.
- * Copyright (C) 2019  Thomas Piccirello <thomas.piccirello@gmail.com>
+ * Copyright (C) 2024  Vladimir Golovnev <glassez@yandex.ru>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -26,47 +26,25 @@
  * exception statement from your version.
  */
 
-'use strict';
+#pragma once
 
-if (window.qBittorrent === undefined) {
-    window.qBittorrent = {};
-}
+#include <QMetaEnum>
 
-window.qBittorrent.LocalPreferences = (function() {
-    const exports = function() {
-        return {
-            LocalPreferencesClass: LocalPreferencesClass
+namespace BitTorrent
+{
+    // Using `Q_ENUM_NS()` without a wrapper namespace in our case is not advised
+    // since `Q_NAMESPACE` cannot be used when the same namespace resides at different files.
+    // https://www.kdab.com/new-qt-5-8-meta-object-support-namespaces/#comment-143779
+    inline namespace TorrentContentRemoveOptionNS
+    {
+        Q_NAMESPACE
+
+        enum class TorrentContentRemoveOption
+        {
+            Delete,
+            MoveToTrash
         };
-    };
 
-    const LocalPreferencesClass = new Class({
-        get: function(key, defaultValue) {
-            const value = localStorage.getItem(key);
-            return ((value === null) && (defaultValue !== undefined))
-                ? defaultValue
-                : value;
-        },
-
-        set: function(key, value) {
-            try {
-                localStorage.setItem(key, value);
-            }
-            catch (err) {
-                console.error(err);
-            }
-        },
-
-        remove: function(key) {
-            try {
-                localStorage.removeItem(key);
-            }
-            catch (err) {
-                console.error(err);
-            }
-        }
-    });
-
-    return exports();
-})();
-
-Object.freeze(window.qBittorrent.LocalPreferences);
+        Q_ENUM_NS(TorrentContentRemoveOption)
+    }
+}

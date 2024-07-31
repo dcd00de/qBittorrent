@@ -41,20 +41,21 @@
 #include <QBitArray>
 #include <QDateTime>
 #include <QHash>
+#include <QList>
 #include <QMap>
 #include <QObject>
 #include <QQueue>
 #include <QString>
-#include <QVector>
 
 #include "base/path.h"
 #include "base/tagset.h"
 #include "infohash.h"
 #include "speedmonitor.h"
+#include "sslparameters.h"
 #include "torrent.h"
 #include "torrentcontentlayout.h"
 #include "torrentinfo.h"
-#include "trackerentry.h"
+#include "trackerentrystatus.h"
 
 namespace BitTorrent
 {
@@ -138,19 +139,26 @@ namespace BitTorrent
         int piecesHave() const override;
         qreal progress() const override;
         QDateTime addedTime() const override;
+
         qreal ratioLimit() const override;
+        void setRatioLimit(qreal limit) override;
         int seedingTimeLimit() const override;
+        void setSeedingTimeLimit(int limit) override;
         int inactiveSeedingTimeLimit() const override;
+        void setInactiveSeedingTimeLimit(int limit) override;
+        ShareLimitAction shareLimitAction() const override;
+        void setShareLimitAction(ShareLimitAction action) override;
 
         Path filePath(int index) const override;
         Path actualFilePath(int index) const override;
         qlonglong fileSize(int index) const override;
         PathList filePaths() const override;
-        QVector<DownloadPriority> filePriorities() const override;
+        PathList actualFilePaths() const override;
+        QList<DownloadPriority> filePriorities() const override;
 
         TorrentInfo info() const override;
         bool isFinished() const override;
-        bool isPaused() const override;
+        bool isStopped() const override;
         bool isQueued() const override;
         bool isForced() const override;
         bool isChecking() const override;
@@ -168,15 +176,15 @@ namespace BitTorrent
         bool hasMissingFiles() const override;
         bool hasError() const override;
         int queuePosition() const override;
-        QVector<TrackerEntry> trackers() const override;
-        QVector<QUrl> urlSeeds() const override;
+        QList<TrackerEntryStatus> trackers() const override;
+        QList<QUrl> urlSeeds() const override;
         QString error() const override;
         qlonglong totalDownload() const override;
         qlonglong totalUpload() const override;
         qlonglong activeTime() const override;
         qlonglong finishedTime() const override;
         qlonglong eta() const override;
-        QVector<qreal> filesProgress() const override;
+        QList<qreal> filesProgress() const override;
         int seedsCount() const override;
         int peersCount() const override;
         int leechsCount() const override;
@@ -194,15 +202,16 @@ namespace BitTorrent
         bool isDHTDisabled() const override;
         bool isPEXDisabled() const override;
         bool isLSDDisabled() const override;
-        QVector<PeerInfo> peers() const override;
+        QList<PeerInfo> peers() const override;
         QBitArray pieces() const override;
         QBitArray downloadingPieces() const override;
-        QVector<int> pieceAvailability() const override;
+        QList<int> pieceAvailability() const override;
         qreal distributedCopies() const override;
         qreal maxRatio() const override;
         int maxSeedingTime() const override;
         int maxInactiveSeedingTime() const override;
         qreal realRatio() const override;
+        qreal popularity() const override;
         int uploadPayloadRate() const override;
         int downloadPayloadRate() const override;
         qlonglong totalPayloadUpload() const override;
@@ -210,21 +219,18 @@ namespace BitTorrent
         int connectionsCount() const override;
         int connectionsLimit() const override;
         qlonglong nextAnnounce() const override;
-        QVector<qreal> availableFileFractions() const override;
+        QList<qreal> availableFileFractions() const override;
 
         void setName(const QString &name) override;
         void setSequentialDownload(bool enable) override;
         void setFirstLastPiecePriority(bool enabled) override;
-        void pause() override;
-        void resume(TorrentOperatingMode mode = TorrentOperatingMode::AutoManaged) override;
+        void stop() override;
+        void start(TorrentOperatingMode mode = TorrentOperatingMode::AutoManaged) override;
         void forceReannounce(int index = -1) override;
         void forceDHTAnnounce() override;
         void forceRecheck() override;
         void renameFile(int index, const Path &path) override;
-        void prioritizeFiles(const QVector<DownloadPriority> &priorities) override;
-        void setRatioLimit(qreal limit) override;
-        void setSeedingTimeLimit(int limit) override;
-        void setInactiveSeedingTimeLimit(int limit) override;
+        void prioritizeFiles(const QList<DownloadPriority> &priorities) override;
         void setUploadLimit(int limit) override;
         void setDownloadLimit(int limit) override;
         void setSuperSeeding(bool enable) override;
@@ -232,27 +238,30 @@ namespace BitTorrent
         void setPEXDisabled(bool disable) override;
         void setLSDDisabled(bool disable) override;
         void flushCache() const override;
-        void addTrackers(QVector<TrackerEntry> trackers) override;
+        void addTrackers(QList<TrackerEntry> trackers) override;
         void removeTrackers(const QStringList &trackers) override;
-        void replaceTrackers(QVector<TrackerEntry> trackers) override;
-        void addUrlSeeds(const QVector<QUrl> &urlSeeds) override;
-        void removeUrlSeeds(const QVector<QUrl> &urlSeeds) override;
+        void replaceTrackers(QList<TrackerEntry> trackers) override;
+        void addUrlSeeds(const QList<QUrl> &urlSeeds) override;
+        void removeUrlSeeds(const QList<QUrl> &urlSeeds) override;
         bool connectPeer(const PeerAddress &peerAddress) override;
         void clearPeers() override;
         void setMetadata(const TorrentInfo &torrentInfo) override;
 
         StopCondition stopCondition() const override;
         void setStopCondition(StopCondition stopCondition) override;
+        SSLParameters getSSLParameters() const override;
+        void setSSLParameters(const SSLParameters &sslParams) override;
+        bool applySSLParameters();
 
         QString createMagnetURI() const override;
         nonstd::expected<QByteArray, QString> exportToBuffer() const override;
         nonstd::expected<void, QString> exportToFile(const Path &path) const override;
 
-        void fetchPeerInfo(std::function<void (QVector<PeerInfo>)> resultHandler) const override;
-        void fetchURLSeeds(std::function<void (QVector<QUrl>)> resultHandler) const override;
-        void fetchPieceAvailability(std::function<void (QVector<int>)> resultHandler) const override;
+        void fetchPeerInfo(std::function<void (QList<PeerInfo>)> resultHandler) const override;
+        void fetchURLSeeds(std::function<void (QList<QUrl>)> resultHandler) const override;
+        void fetchPieceAvailability(std::function<void (QList<int>)> resultHandler) const override;
         void fetchDownloadingPieces(std::function<void (QBitArray)> resultHandler) const override;
-        void fetchAvailableFileFractions(std::function<void (QVector<qreal>)> resultHandler) const override;
+        void fetchAvailableFileFractions(std::function<void (QList<qreal>)> resultHandler) const override;
 
         bool needSaveResumeData() const;
 
@@ -261,6 +270,7 @@ namespace BitTorrent
 
         void handleAlert(const lt::alert *a);
         void handleStateUpdate(const lt::torrent_status &nativeStatus);
+        void handleQueueingModeChanged();
         void handleCategoryOptionsChanged();
         void handleAppendExtensionToggled();
         void handleUnwantedFolderToggled();
@@ -268,8 +278,8 @@ namespace BitTorrent
         void deferredRequestResumeData();
         void handleMoveStorageJobFinished(const Path &path, MoveStorageContext context, bool hasOutstandingJob);
         void fileSearchFinished(const Path &savePath, const PathList &fileNames);
-        TrackerEntry updateTrackerEntry(const lt::announce_entry &announceEntry, const QHash<lt::tcp::endpoint, QMap<int, int>> &updateInfo);
-        void resetTrackerEntries();
+        TrackerEntryStatus updateTrackerEntryStatus(const lt::announce_entry &announceEntry, const QHash<lt::tcp::endpoint, QMap<int, int>> &updateInfo);
+        void resetTrackerEntryStatuses();
 
     private:
         using EventTrigger = std::function<void ()>;
@@ -326,7 +336,7 @@ namespace BitTorrent
         TorrentInfo m_torrentInfo;
         PathList m_filePaths;
         QHash<lt::file_index_t, int> m_indexMap;
-        QVector<DownloadPriority> m_filePriorities;
+        QList<DownloadPriority> m_filePriorities;
         QBitArray m_completedFiles;
         SpeedMonitor m_payloadRateMonitor;
 
@@ -342,8 +352,8 @@ namespace BitTorrent
 
         MaintenanceJob m_maintenanceJob = MaintenanceJob::None;
 
-        QVector<TrackerEntry> m_trackerEntries;
-        QVector<QUrl> m_urlSeeds;
+        QList<TrackerEntryStatus> m_trackerEntryStatuses;
+        QList<QUrl> m_urlSeeds;
         FileErrorInfo m_lastFileError;
 
         // Persistent data
@@ -352,17 +362,19 @@ namespace BitTorrent
         Path m_downloadPath;
         QString m_category;
         TagSet m_tags;
-        qreal m_ratioLimit;
-        int m_seedingTimeLimit;
-        int m_inactiveSeedingTimeLimit;
-        TorrentOperatingMode m_operatingMode;
-        TorrentContentLayout m_contentLayout;
-        bool m_hasFinishedStatus;
+        qreal m_ratioLimit = 0;
+        int m_seedingTimeLimit = 0;
+        int m_inactiveSeedingTimeLimit = 0;
+        ShareLimitAction m_shareLimitAction = ShareLimitAction::Default;
+        TorrentOperatingMode m_operatingMode = TorrentOperatingMode::AutoManaged;
+        TorrentContentLayout m_contentLayout = TorrentContentLayout::Original;
+        bool m_hasFinishedStatus = false;
         bool m_hasMissingFiles = false;
         bool m_hasFirstLastPiecePriority = false;
-        bool m_useAutoTMM;
-        bool m_isStopped;
+        bool m_useAutoTMM = false;
+        bool m_isStopped = false;
         StopCondition m_stopCondition = StopCondition::None;
+        SSLParameters m_sslParams;
 
         bool m_unchecked = false;
 
@@ -372,7 +384,7 @@ namespace BitTorrent
         int m_uploadLimit = 0;
 
         QBitArray m_pieces;
-        QVector<std::int64_t> m_filesProgress;
+        QList<std::int64_t> m_filesProgress;
 
         bool m_deferredRequestResumeDataInvoked = false;
     };

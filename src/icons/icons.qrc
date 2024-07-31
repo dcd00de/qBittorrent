@@ -314,6 +314,8 @@
         <file>network-connect.svg</file>
         <file>network-server.svg</file>
         <file>object-locked.svg</file>
+        <file>pause-session.svg</file>
+        <file>paused.svg</file>
         <file>peers-add.svg</file>
         <file>peers-remove.svg</file>
         <file>peers.svg</file>
@@ -330,6 +332,8 @@
         <file>queued.svg</file>
         <file>ratio.svg</file>
         <file>reannounce.svg</file>
+        <file>rss_read_article.png</file>
+        <file>rss_unread_article.png</file>
         <file>security-high.svg</file>
         <file>security-low.svg</file>
         <file>set-location.svg</file>

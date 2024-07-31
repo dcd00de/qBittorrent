@@ -105,6 +105,9 @@ public:
     bool callMainInstance();
     const QBtCommandLineParameters &commandLineArgs() const;
 
+    QString instanceName() const override;
+    void setInstanceName(const QString &name) override;
+
     // FileLogger properties
     bool isFileLoggerEnabled() const override;
     void setFileLoggerEnabled(bool value) override;
@@ -123,6 +126,8 @@ public:
 
     int memoryWorkingSetLimit() const override;
     void setMemoryWorkingSetLimit(int size) override;
+
+    void sendTestEmail() const override;
 
 #ifdef Q_OS_WIN
     MemoryPriority processMemoryPriority() const override;
@@ -194,6 +199,7 @@ private:
 
     QList<QBtCommandLineParameters> m_paramsQueue;
 
+    SettingValue<QString> m_storeInstanceName;
     SettingValue<bool> m_storeFileLoggerEnabled;
     SettingValue<bool> m_storeFileLoggerBackup;
     SettingValue<bool> m_storeFileLoggerDeleteOld;

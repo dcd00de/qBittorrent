@@ -1,6 +1,6 @@
 /*
  * Bittorrent Client using Qt and libtorrent.
- * Copyright (C) 2016 qBittorrent project
+ * Copyright (C) 2016-2024 qBittorrent project
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -63,6 +63,7 @@ namespace
         // qBittorrent section
         QBITTORRENT_HEADER,
         RESUME_DATA_STORAGE,
+        TORRENT_CONTENT_REMOVE_OPTION,
 #if defined(QBT_USES_LIBTORRENT2) && !defined(Q_OS_MACOS)
         MEMORY_WORKING_SET_LIMIT,
 #endif
@@ -79,6 +80,7 @@ namespace
         CONFIRM_RECHECK_TORRENT,
         RECHECK_COMPLETED,
         // UI related
+        APP_INSTANCE_NAME,
         LIST_REFRESH,
         RESOLVE_HOSTS,
         RESOLVE_COUNTRIES,
@@ -104,6 +106,8 @@ namespace
         ENABLE_MARK_OF_THE_WEB,
 #endif // Q_OS_MACOS || Q_OS_WIN
         PYTHON_EXECUTABLE_PATH,
+        START_SESSION_PAUSED,
+        SESSION_SHUTDOWN_TIMEOUT,
 
         // libtorrent section
         LIBTORRENT_HEADER,
@@ -280,6 +284,8 @@ void AdvancedSettings::saveAdvancedSettings() const
     session->setBlockPeersOnPrivilegedPorts(m_checkBoxBlockPeersOnPrivilegedPorts.isChecked());
     // Recheck torrents on completion
     pref->recheckTorrentsOnCompletion(m_checkBoxRecheckCompleted.isChecked());
+    // Customize application instance name
+    app()->setInstanceName(m_lineEditAppInstanceName.text());
     // Transfer list refresh interval
     session->setRefreshInterval(m_spinBoxListRefresh.value());
     // Peer resolution
@@ -328,6 +334,10 @@ void AdvancedSettings::saveAdvancedSettings() const
 #endif // Q_OS_MACOS || Q_OS_WIN
     // Python executable path
     pref->setPythonExecutablePath(Path(m_pythonExecutablePath.text().trimmed()));
+    // Start session paused
+    session->setStartPaused(m_checkBoxStartSessionPaused.isChecked());
+    // Session shutdown timeout
+    session->setShutdownTimeout(m_spinBoxSessionShutdownTimeout.value());
     // Choking algorithm
     session->setChokingAlgorithm(m_comboBoxChokingAlgorithm.currentData().value<BitTorrent::ChokingAlgorithm>());
     // Seed choking algorithm
@@ -355,6 +365,8 @@ void AdvancedSettings::saveAdvancedSettings() const
     session->setI2PInboundLength(m_spinBoxI2PInboundLength.value());
     session->setI2POutboundLength(m_spinBoxI2POutboundLength.value());
 #endif
+
+    session->setTorrentContentRemoveOption(m_comboBoxTorrentContentRemoveOption.currentData().value<BitTorrent::TorrentContentRemoveOption>());
 }
 
 #ifndef QBT_USES_LIBTORRENT2
@@ -462,6 +474,11 @@ void AdvancedSettings::loadAdvancedSettings()
     m_comboBoxResumeDataStorage.addItem(tr("SQLite database (experimental)"), QVariant::fromValue(BitTorrent::ResumeDataStorageType::SQLite));
     m_comboBoxResumeDataStorage.setCurrentIndex(m_comboBoxResumeDataStorage.findData(QVariant::fromValue(session->resumeDataStorageType())));
     addRow(RESUME_DATA_STORAGE, tr("Resume data storage type (requires restart)"), &m_comboBoxResumeDataStorage);
+
+    m_comboBoxTorrentContentRemoveOption.addItem(tr("Delete files permanently"), QVariant::fromValue(BitTorrent::TorrentContentRemoveOption::Delete));
+    m_comboBoxTorrentContentRemoveOption.addItem(tr("Move files to trash (if possible)"), QVariant::fromValue(BitTorrent::TorrentContentRemoveOption::MoveToTrash));
+    m_comboBoxTorrentContentRemoveOption.setCurrentIndex(m_comboBoxTorrentContentRemoveOption.findData(QVariant::fromValue(session->torrentContentRemoveOption())));
+    addRow(TORRENT_CONTENT_REMOVE_OPTION, tr("Torrent content removing mode"), &m_comboBoxTorrentContentRemoveOption);
 
 #if defined(QBT_USES_LIBTORRENT2) && !defined(Q_OS_MACOS)
     // Physical memory (RAM) usage limit
@@ -723,6 +740,10 @@ void AdvancedSettings::loadAdvancedSettings()
     // Recheck completed torrents
     m_checkBoxRecheckCompleted.setChecked(pref->recheckTorrentsOnCompletion());
     addRow(RECHECK_COMPLETED, tr("Recheck torrents on completion"), &m_checkBoxRecheckCompleted);
+    // Customize application instance name
+    m_lineEditAppInstanceName.setText(app()->instanceName());
+    m_lineEditAppInstanceName.setToolTip(tr("It appends the text to the window title to help distinguish qBittorent instances"));
+    addRow(APP_INSTANCE_NAME, tr("Customize application instance name"), &m_lineEditAppInstanceName);
     // Refresh interval
     m_spinBoxListRefresh.setMinimum(30);
     m_spinBoxListRefresh.setMaximum(99999);
@@ -836,6 +857,18 @@ void AdvancedSettings::loadAdvancedSettings()
     m_pythonExecutablePath.setPlaceholderText(tr("(Auto detect if empty)"));
     m_pythonExecutablePath.setText(pref->getPythonExecutablePath().toString());
     addRow(PYTHON_EXECUTABLE_PATH, tr("Python executable path (may require restart)"), &m_pythonExecutablePath);
+    // Start session paused
+    m_checkBoxStartSessionPaused.setChecked(session->isStartPaused());
+    addRow(START_SESSION_PAUSED, tr("Start BitTorrent session in paused state"), &m_checkBoxStartSessionPaused);
+    // Session shutdown timeout
+    m_spinBoxSessionShutdownTimeout.setMinimum(-1);
+    m_spinBoxSessionShutdownTimeout.setMaximum(std::numeric_limits<int>::max());
+    m_spinBoxSessionShutdownTimeout.setValue(session->shutdownTimeout());
+    m_spinBoxSessionShutdownTimeout.setSuffix(tr(" sec", " seconds"));
+    m_spinBoxSessionShutdownTimeout.setSpecialValueText(tr("-1 (unlimited)"));
+    m_spinBoxSessionShutdownTimeout.setToolTip(u"Sets the timeout for the session to be shut down gracefully, at which point it will be forcibly terminated.<br>Note that this does not apply to the saving resume data time."_s);
+    addRow(SESSION_SHUTDOWN_TIMEOUT, tr("BitTorrent session shutdown timeout [-1: unlimited]"), &m_spinBoxSessionShutdownTimeout);
+
     // Choking algorithm
     m_comboBoxChokingAlgorithm.addItem(tr("Fixed slots"), QVariant::fromValue(BitTorrent::ChokingAlgorithm::FixedSlots));
     m_comboBoxChokingAlgorithm.addItem(tr("Upload rate based"), QVariant::fromValue(BitTorrent::ChokingAlgorithm::RateBased));
@@ -933,6 +966,7 @@ void AdvancedSettings::addRow(const int row, const QString &text, T *widget)
 {
     auto *label = new QLabel(text);
     label->setOpenExternalLinks(true);
+    label->setToolTip(widget->toolTip());
 
     setCellWidget(row, PROPERTY, label);
     setCellWidget(row, VALUE, widget);

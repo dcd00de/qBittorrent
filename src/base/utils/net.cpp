@@ -33,7 +33,6 @@
 #include <QSslCertificate>
 #include <QSslKey>
 #include <QString>
-#include <QVector>
 
 #include "base/global.h"
 
@@ -62,7 +61,7 @@ namespace Utils
                     || (addr == QHostAddress(u"::ffff:127.0.0.1"_s));
         }
 
-        bool isIPInSubnets(const QHostAddress &addr, const QVector<Subnet> &subnets)
+        bool isIPInSubnets(const QHostAddress &addr, const QList<Subnet> &subnets)
         {
             QHostAddress protocolEquivalentAddress;
             bool addrConversionOk = false;
@@ -135,20 +134,6 @@ namespace Utils
         bool isSSLCertificatesValid(const QByteArray &data)
         {
             return !loadSSLCertificate(data).isEmpty();
-        }
-
-        QSslKey loadSSLKey(const QByteArray &data)
-        {
-            // try different formats
-            const QSslKey key {data, QSsl::Rsa};
-            if (!key.isNull())
-                return key;
-            return {data, QSsl::Ec};
-        }
-
-        bool isSSLKeyValid(const QByteArray &data)
-        {
-            return !loadSSLKey(data).isNull();
         }
     }
 }

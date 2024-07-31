@@ -1,6 +1,6 @@
 /*
  * Bittorrent Client using Qt and libtorrent.
- * Copyright (C) 2015, 2018  Vladimir Golovnev <glassez@yandex.ru>
+ * Copyright (C) 2015-2024  Vladimir Golovnev <glassez@yandex.ru>
  * Copyright (C) 2006  Christophe Dumez <chris@qbittorrent.org>
  *
  * This program is free software; you can redistribute it and/or
@@ -74,12 +74,11 @@ namespace
             }
 
             // python 2: remove "*.pyc" files
-            const QStringList files = QDir(dir.data()).entryList(QDir::Files);
-            for (const QString &file : files)
+            QDirIterator it {dir.data(), {u"*.pyc"_s}, QDir::Files};
+            while (it.hasNext())
             {
-                const Path path {file};
-                if (path.hasExtension(u".pyc"_s))
-                    Utils::Fs::removeFile(path);
+                const QString filePath = it.next();
+                Utils::Fs::removeFile(Path(filePath));
             }
         }
     }
@@ -180,6 +179,17 @@ QStringList SearchPluginManager::getPluginCategories(const QString &pluginName) 
 PluginInfo *SearchPluginManager::pluginInfo(const QString &name) const
 {
     return m_plugins.value(name);
+}
+
+QString SearchPluginManager::pluginNameBySiteURL(const QString &siteURL) const
+{
+    for (const PluginInfo *plugin : asConst(m_plugins))
+    {
+        if (plugin->url == siteURL)
+            return plugin->name;
+    }
+
+    return {};
 }
 
 void SearchPluginManager::enablePlugin(const QString &name, const bool enabled)
@@ -298,11 +308,13 @@ bool SearchPluginManager::uninstallPlugin(const QString &name)
     clearPythonCache(engineLocation());
 
     // remove it from hard drive
-    const Path pluginsPath = pluginsLocation();
-    const QStringList filters {name + u".*"};
-    const QStringList files = QDir(pluginsPath.data()).entryList(filters, QDir::Files, QDir::Unsorted);
-    for (const QString &file : files)
-        Utils::Fs::removeFile(pluginsPath / Path(file));
+    QDirIterator iter {pluginsLocation().data(), {name + u".*"}, QDir::Files};
+    while (iter.hasNext())
+    {
+        const QString filePath = iter.next();
+        Utils::Fs::removeFile(Path(filePath));
+    }
+
     // Remove it from supported engines
     delete m_plugins.take(name);
 
@@ -337,9 +349,9 @@ void SearchPluginManager::checkForUpdates()
             , this, &SearchPluginManager::versionInfoDownloadFinished);
 }
 
-SearchDownloadHandler *SearchPluginManager::downloadTorrent(const QString &siteUrl, const QString &url)
+SearchDownloadHandler *SearchPluginManager::downloadTorrent(const QString &pluginName, const QString &url)
 {
-    return new SearchDownloadHandler {siteUrl, url, this};
+    return new SearchDownloadHandler(pluginName, url, this);
 }
 
 SearchHandler *SearchPluginManager::startSearch(const QString &pattern, const QString &category, const QStringList &usedPlugins)
@@ -355,14 +367,14 @@ QString SearchPluginManager::categoryFullName(const QString &categoryName)
     const QHash<QString, QString> categoryTable
     {
         {u"all"_s, tr("All categories")},
-        {u"movies"_s, tr("Movies")},
-        {u"tv"_s, tr("TV shows")},
-        {u"music"_s, tr("Music")},
-        {u"games"_s, tr("Games")},
         {u"anime"_s, tr("Anime")},
-        {u"software"_s, tr("Software")},
+        {u"books"_s, tr("Books")},
+        {u"games"_s, tr("Games")},
+        {u"movies"_s, tr("Movies")},
+        {u"music"_s, tr("Music")},
         {u"pictures"_s, tr("Pictures")},
-        {u"books"_s, tr("Books")}
+        {u"software"_s, tr("Software")},
+        {u"tv"_s, tr("TV shows")}
     };
     return categoryTable.value(categoryName);
 }

@@ -36,6 +36,8 @@
 
 #include <QCoreApplication>
 #include <QDebug>
+#include <QDir>
+#include <QDirIterator>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -62,6 +64,7 @@
 #include "base/utils/password.h"
 #include "base/utils/string.h"
 #include "base/version.h"
+#include "apierror.h"
 #include "../webapplication.h"
 
 using namespace std::chrono_literals;
@@ -78,6 +81,17 @@ void AppController::versionAction()
 
 void AppController::buildInfoAction()
 {
+    const QString platformName =
+#ifdef Q_OS_LINUX
+        u"linux"_s;
+#elif defined(Q_OS_MACOS)
+        u"macos"_s;
+#elif defined(Q_OS_WIN)
+        u"windows"_s;
+#else
+        u"unknown"_s;
+#endif
+
     const QJsonObject versions =
     {
         {u"qt"_s, QStringLiteral(QT_VERSION_STR)},
@@ -85,7 +99,8 @@ void AppController::buildInfoAction()
         {u"boost"_s, Utils::Misc::boostVersionString()},
         {u"openssl"_s, Utils::Misc::opensslVersionString()},
         {u"zlib"_s, Utils::Misc::zlibVersionString()},
-        {u"bitness"_s, (QT_POINTER_SIZE * 8)}
+        {u"bitness"_s, (QT_POINTER_SIZE * 8)},
+        {u"platform"_s, platformName}
     };
     setResult(versions);
 }
@@ -121,13 +136,13 @@ void AppController::preferencesAction()
     data[u"file_log_age"_s] = app()->fileLoggerAge();
     data[u"file_log_age_type"_s] = app()->fileLoggerAgeType();
     // Delete torrent contents files on torrent removal
-    data[u"delete_torrent_content_files"_s] = pref->deleteTorrentFilesAsDefault();
+    data[u"delete_torrent_content_files"_s] = pref->removeTorrentContent();
 
     // Downloads
     // When adding a torrent
     data[u"torrent_content_layout"_s] = Utils::String::fromEnum(session->torrentContentLayout());
     data[u"add_to_top_of_queue"_s] = session->isAddTorrentToQueueTop();
-    data[u"start_paused_enabled"_s] = session->isAddTorrentPaused();
+    data[u"add_stopped_enabled"_s] = session->isAddTorrentStopped();
     data[u"torrent_stop_condition"_s] = Utils::String::fromEnum(session->torrentStopCondition());
     data[u"merge_trackers"_s] = session->isMergeTrackersEnabled();
     data[u"auto_delete_mode"_s] = static_cast<int>(TorrentFileGuard::autoDeleteMode());
@@ -189,6 +204,8 @@ void AppController::preferencesAction()
     // Connection
     // Listening Port
     data[u"listen_port"_s] = session->port();
+    data[u"ssl_enabled"_s] = session->isSSLEnabled();
+    data[u"ssl_listen_port"_s] = session->sslPort();
     data[u"random_port"_s] = (session->port() == 0);  // deprecated
     data[u"upnp"_s] = Net::PortForwarder::instance()->isEnabled();
     // Connections Limits
@@ -274,7 +291,7 @@ void AppController::preferencesAction()
     data[u"max_seeding_time"_s] = session->globalMaxSeedingMinutes();
     data[u"max_inactive_seeding_time_enabled"_s] = (session->globalMaxInactiveSeedingMinutes() >= 0.);
     data[u"max_inactive_seeding_time"_s] = session->globalMaxInactiveSeedingMinutes();
-    data[u"max_ratio_act"_s] = session->maxRatioAction();
+    data[u"max_ratio_act"_s] = static_cast<int>(session->shareLimitAction());
     // Add trackers
     data[u"add_trackers_enabled"_s] = session->isAddTrackersEnabled();
     data[u"add_trackers"_s] = session->additionalTrackers();
@@ -333,6 +350,8 @@ void AppController::preferencesAction()
     // qBitorrent preferences
     // Resume data storage type
     data[u"resume_data_storage_type"_s] = Utils::String::fromEnum(session->resumeDataStorageType());
+    // Torrent content removing mode
+    data[u"torrent_content_remove_option"_s] = Utils::String::fromEnum(session->torrentContentRemoveOption());
     // Physical memory (RAM) usage limit
     data[u"memory_working_set_limit"_s] = app()->memoryWorkingSetLimit();
     // Current network interface
@@ -347,6 +366,8 @@ void AppController::preferencesAction()
     data[u"torrent_file_size_limit"_s] = pref->getTorrentFileSizeLimit();
     // Recheck completed torrents
     data[u"recheck_completed_torrents"_s] = pref->recheckTorrentsOnCompletion();
+    // Customize application instance name
+    data[u"app_instance_name"_s] = app()->instanceName();
     // Refresh interval
     data[u"refresh_interval"_s] = session->refreshInterval();
     // Resolve peer countries
@@ -500,7 +521,7 @@ void AppController::setPreferencesAction()
         app()->setFileLoggerAgeType(it.value().toInt());
     // Delete torrent content files on torrent removal
     if (hasKey(u"delete_torrent_content_files"_s))
-        pref->setDeleteTorrentFilesAsDefault(it.value().toBool());
+        pref->setRemoveTorrentContent(it.value().toBool());
 
     // Downloads
     // When adding a torrent
@@ -508,8 +529,8 @@ void AppController::setPreferencesAction()
         session->setTorrentContentLayout(Utils::String::toEnum(it.value().toString(), BitTorrent::TorrentContentLayout::Original));
     if (hasKey(u"add_to_top_of_queue"_s))
         session->setAddTorrentToQueueTop(it.value().toBool());
-    if (hasKey(u"start_paused_enabled"_s))
-        session->setAddTorrentPaused(it.value().toBool());
+    if (hasKey(u"add_stopped_enabled"_s))
+        session->setAddTorrentStopped(it.value().toBool());
     if (hasKey(u"torrent_stop_condition"_s))
         session->setTorrentStopCondition(Utils::String::toEnum(it.value().toString(), BitTorrent::Torrent::StopCondition::None));
     if (hasKey(u"merge_trackers"_s))
@@ -642,6 +663,11 @@ void AppController::setPreferencesAction()
     {
         session->setPort(it.value().toInt());
     }
+    // SSL Torrents
+    if (hasKey(u"ssl_enabled"_s))
+        session->setSSLEnabled(it.value().toBool());
+    if (hasKey(u"ssl_listen_port"_s))
+        session->setSSLPort(it.value().toInt());
     if (hasKey(u"upnp"_s))
         Net::PortForwarder::instance()->setEnabled(it.value().toBool());
     // Connections Limits
@@ -791,7 +817,24 @@ void AppController::setPreferencesAction()
             ? m[u"max_inactive_seeding_time"_s].toInt() : -1);
     }
     if (hasKey(u"max_ratio_act"_s))
-        session->setMaxRatioAction(static_cast<MaxRatioAction>(it.value().toInt()));
+    {
+        switch (it.value().toInt())
+        {
+        default:
+        case 0:
+            session->setShareLimitAction(BitTorrent::ShareLimitAction::Stop);
+            break;
+        case 1:
+            session->setShareLimitAction(BitTorrent::ShareLimitAction::Remove);
+            break;
+        case 2:
+            session->setShareLimitAction(BitTorrent::ShareLimitAction::EnableSuperSeeding);
+            break;
+        case 3:
+            session->setShareLimitAction(BitTorrent::ShareLimitAction::RemoveWithContent);
+            break;
+        }
+    }
     // Add trackers
     if (hasKey(u"add_trackers_enabled"_s))
         session->setAddTrackersEnabled(it.value().toBool());
@@ -890,6 +933,9 @@ void AppController::setPreferencesAction()
     // Resume data storage type
     if (hasKey(u"resume_data_storage_type"_s))
         session->setResumeDataStorageType(Utils::String::toEnum(it.value().toString(), BitTorrent::ResumeDataStorageType::Legacy));
+    // Torrent content removing mode
+    if (hasKey(u"torrent_content_remove_option"_s))
+        session->setTorrentContentRemoveOption(Utils::String::toEnum(it.value().toString(), BitTorrent::TorrentContentRemoveOption::MoveToTrash));
     // Physical memory (RAM) usage limit
     if (hasKey(u"memory_working_set_limit"_s))
         app()->setMemoryWorkingSetLimit(it.value().toInt());
@@ -924,6 +970,9 @@ void AppController::setPreferencesAction()
     // Recheck completed torrents
     if (hasKey(u"recheck_completed_torrents"_s))
         pref->recheckTorrentsOnCompletion(it.value().toBool());
+    // Customize application instance name
+    if (hasKey(u"app_instance_name"_s))
+        app()->setInstanceName(it.value().toString());
     // Refresh interval
     if (hasKey(u"refresh_interval"_s))
         session->setRefreshInterval(it.value().toInt());
@@ -1081,6 +1130,46 @@ void AppController::setPreferencesAction()
 void AppController::defaultSavePathAction()
 {
     setResult(BitTorrent::Session::instance()->savePath().toString());
+}
+
+void AppController::sendTestEmailAction()
+{
+    app()->sendTestEmail();
+}
+
+
+void AppController::getDirectoryContentAction()
+{
+    requireParams({u"dirPath"_s});
+
+    const QString dirPath = params().value(u"dirPath"_s);
+    if (dirPath.isEmpty() || dirPath.startsWith(u':'))
+        throw APIError(APIErrorType::BadParams, tr("Invalid directory path"));
+
+    const QDir dir {dirPath};
+    if (!dir.isAbsolute())
+        throw APIError(APIErrorType::BadParams, tr("Invalid directory path"));
+    if (!dir.exists())
+        throw APIError(APIErrorType::NotFound, tr("Directory does not exist"));
+
+    const QString visibility = params().value(u"mode"_s, u"all"_s);
+
+    const auto parseDirectoryContentMode = [](const QString &visibility) -> QDir::Filters
+    {
+        if (visibility == u"dirs")
+            return QDir::Dirs;
+        if (visibility == u"files")
+            return QDir::Files;
+        if (visibility == u"all")
+            return (QDir::Dirs | QDir::Files);
+        throw APIError(APIErrorType::BadParams, tr("Invalid mode, allowed values: %1").arg(u"all, dirs, files"_s));
+    };
+
+    QJsonArray ret;
+    QDirIterator it {dirPath, (QDir::NoDotAndDotDot | parseDirectoryContentMode(visibility))};
+    while (it.hasNext())
+        ret.append(it.next());
+    setResult(ret);
 }
 
 void AppController::networkInterfaceListAction()

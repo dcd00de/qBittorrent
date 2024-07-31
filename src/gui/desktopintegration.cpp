@@ -1,6 +1,6 @@
 /*
  * Bittorrent Client using Qt and libtorrent.
- * Copyright (C) 2022  Vladimir Golovnev <glassez@yandex.ru>
+ * Copyright (C) 2022-2024  Vladimir Golovnev <glassez@yandex.ru>
  * Copyright (C) 2006  Christophe Dumez <chris@qbittorrent.org>
  *
  * This program is free software; you can redistribute it and/or
@@ -31,6 +31,7 @@
 
 #include <chrono>
 
+#include <QtEnvironmentVariables>
 #include <QMenu>
 #include <QTimer>
 
@@ -72,6 +73,7 @@ using namespace std::chrono_literals;
 DesktopIntegration::DesktopIntegration(QObject *parent)
     : QObject(parent)
     , m_storeNotificationEnabled {NOTIFICATIONS_SETTINGS_KEY(u"Enabled"_s), true}
+    , m_menu {new QMenu}
 #ifdef QBT_USES_DBUS
     , m_storeNotificationTimeOut {NOTIFICATIONS_SETTINGS_KEY(u"Timeout"_s), -1}
 #endif
@@ -79,6 +81,7 @@ DesktopIntegration::DesktopIntegration(QObject *parent)
 #ifdef Q_OS_MACOS
     desktopIntegrationInstance = this;
     MacUtils::overrideDockClickHandler(handleDockClicked);
+    m_menu->setAsDockMenu();
 #else
     if (Preferences::instance()->systemTrayEnabled())
         createTrayIcon();
@@ -129,46 +132,6 @@ void DesktopIntegration::setToolTip(const QString &toolTip)
 QMenu *DesktopIntegration::menu() const
 {
     return m_menu;
-}
-
-void DesktopIntegration::setMenu(QMenu *menu)
-{
-    if (menu == m_menu)
-        return;
-
-#if defined Q_OS_MACOS
-    if (m_menu)
-        delete m_menu;
-
-    m_menu = menu;
-
-    if (m_menu)
-        m_menu->setAsDockMenu();
-#elif defined Q_OS_UNIX
-    const bool systemTrayEnabled = m_systrayIcon;
-    if (m_menu)
-    {
-        if (m_systrayIcon)
-        {
-            delete m_systrayIcon;
-            m_systrayIcon = nullptr;
-        }
-        delete m_menu;
-    }
-
-    m_menu = menu;
-
-    if (systemTrayEnabled && !m_systrayIcon)
-        createTrayIcon();
-#else
-    if (m_menu)
-        delete m_menu;
-
-    m_menu = menu;
-
-    if (m_systrayIcon)
-        m_systrayIcon->setContextMenu(m_menu);
-#endif
 }
 
 bool DesktopIntegration::isNotificationsEnabled() const
@@ -283,17 +246,25 @@ void DesktopIntegration::createTrayIcon()
 QIcon DesktopIntegration::getSystrayIcon() const
 {
     const TrayIcon::Style style = Preferences::instance()->trayIconStyle();
+    QIcon icon;
     switch (style)
     {
     default:
     case TrayIcon::Style::Normal:
-        return UIThemeManager::instance()->getIcon(u"qbittorrent-tray"_s);
-
+        icon = UIThemeManager::instance()->getIcon(u"qbittorrent-tray"_s);
+        break;
     case TrayIcon::Style::MonoDark:
-        return UIThemeManager::instance()->getIcon(u"qbittorrent-tray-dark"_s);
-
+        icon = UIThemeManager::instance()->getIcon(u"qbittorrent-tray-dark"_s);
+        break;
     case TrayIcon::Style::MonoLight:
-        return UIThemeManager::instance()->getIcon(u"qbittorrent-tray-light"_s);
+        icon = UIThemeManager::instance()->getIcon(u"qbittorrent-tray-light"_s);
+        break;
     }
+#ifdef Q_OS_UNIX
+    // Workaround for invisible tray icon in KDE, https://bugreports.qt.io/browse/QTBUG-53550
+    if (qEnvironmentVariable("XDG_CURRENT_DESKTOP").compare(u"KDE", Qt::CaseInsensitive) == 0)
+        return icon.pixmap(32);
+#endif
+    return icon;
 }
 #endif // Q_OS_MACOS

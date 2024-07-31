@@ -52,6 +52,8 @@ add_library(qbt_gui STATIC
     desktopintegration.h
     downloadfromurldialog.h
     executionlogwidget.h
+    filterpatternformat.h
+    filterpatternformatmenu.h
     flowlayout.h
     fspathedit.h
     fspathedit_p.h
@@ -151,6 +153,7 @@ add_library(qbt_gui STATIC
     desktopintegration.cpp
     downloadfromurldialog.cpp
     executionlogwidget.cpp
+    filterpatternformatmenu.cpp
     flowlayout.cpp
     fspathedit.cpp
     fspathedit_p.cpp
@@ -275,10 +278,6 @@ if ((CMAKE_SYSTEM_NAME STREQUAL "Windows") OR (CMAKE_SYSTEM_NAME STREQUAL "Darwi
         programupdater.h
         programupdater.cpp
     )
-endif()
-
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    target_link_libraries(qbt_gui PRIVATE PowrProf)
 endif()
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Darwin")

@@ -1,6 +1,6 @@
 /*
  * Bittorrent Client using Qt and libtorrent.
- * Copyright (C) 2022  Vladimir Golovnev <glassez@yandex.ru>
+ * Copyright (C) 2022-2024  Vladimir Golovnev <glassez@yandex.ru>
  * Copyright (C) 2006  Christophe Dumez <chris@qbittorrent.org>
  *
  * This program is free software; you can redistribute it and/or
@@ -42,6 +42,7 @@ class QCloseEvent;
 class QComboBox;
 class QFileSystemWatcher;
 class QSplitter;
+class QString;
 class QTabWidget;
 class QTimer;
 
@@ -84,7 +85,7 @@ class MainWindow final : public GUIApplicationComponent<QMainWindow>
     Q_DISABLE_COPY_MOVE(MainWindow)
 
 public:
-    explicit MainWindow(IGUIApplication *app, WindowState initialState = WindowState::Normal);
+    explicit MainWindow(IGUIApplication *app, WindowState initialState = WindowState::Normal, const QString &titleSuffix = {});
     ~MainWindow() override;
 
     QWidget *currentTabWidget() const;
@@ -97,11 +98,11 @@ public:
     Log::MsgTypes executionLogMsgTypes() const;
     void setExecutionLogMsgTypes(Log::MsgTypes value);
 
-    // Notifications properties
-
     // Misc properties
     bool isDownloadTrackerFavicon() const;
     void setDownloadTrackerFavicon(bool value);
+
+    void setTitleSuffix(const QString &suffix);
 
     void activate();
     void cleanup();
@@ -126,8 +127,8 @@ private slots:
     void displayRSSTab();
     void displayExecutionLogTab();
     void toggleFocusBetweenLineEdits();
-    void reloadSessionStats();
-    void reloadTorrentStats(const QVector<BitTorrent::Torrent *> &torrents);
+    void loadSessionStats();
+    void reloadTorrentStats(const QList<BitTorrent::Torrent *> &torrents);
     void loadPreferences();
     void optionsSaved();
     void toggleAlternativeSpeeds();
@@ -169,7 +170,7 @@ private slots:
     void on_actionDownloadFromURL_triggered();
     void on_actionExit_triggered();
     void on_actionLock_triggered();
-    // Check for unpaused downloading or seeding torrents and prevent system suspend/sleep according to preferences
+    // Check for non-stopped downloading or seeding torrents and prevent system suspend/sleep according to preferences
     void updatePowerManagementState() const;
 
     void toolbarMenuRequested();
@@ -185,7 +186,7 @@ private slots:
 #endif
 
 private:
-    QMenu *createDesktopIntegrationMenu();
+    void populateDesktopIntegrationMenu();
 #ifdef Q_OS_WIN
     void installPython();
 #endif
@@ -202,13 +203,19 @@ private:
     void showStatusBar(bool show);
     void showFiltersSidebar(bool show);
     void applyTransferListFilter();
+    void refreshWindowTitle();
+    void refreshTrayIconTooltip();
 
     Ui::MainWindow *m_ui = nullptr;
 
-    QFileSystemWatcher *m_executableWatcher = nullptr;
-    // GUI related
+    QString m_windowTitle;
+    QString m_downloadRate;
+    QString m_uploadRate;
     bool m_posInitialized = false;
     bool m_neverShown = true;
+
+    QFileSystemWatcher *m_executableWatcher = nullptr;
+    // GUI related
     QPointer<QTabWidget> m_tabs;
     QPointer<StatusBar> m_statusBar;
     QPointer<OptionsDialog> m_options;

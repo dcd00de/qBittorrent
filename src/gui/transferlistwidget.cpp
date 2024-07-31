@@ -1,6 +1,6 @@
 /*
  * Bittorrent Client using Qt and libtorrent.
- * Copyright (C) 2023  Vladimir Golovnev <glassez@yandex.ru>
+ * Copyright (C) 2023-2024  Vladimir Golovnev <glassez@yandex.ru>
  * Copyright (C) 2006  Christophe Dumez <chris@qbittorrent.org>
  *
  * This program is free software; you can redistribute it and/or
@@ -35,17 +35,17 @@
 #include <QDebug>
 #include <QFileDialog>
 #include <QHeaderView>
+#include <QList>
 #include <QMenu>
 #include <QMessageBox>
 #include <QRegularExpression>
 #include <QSet>
 #include <QShortcut>
-#include <QVector>
 #include <QWheelEvent>
 
 #include "base/bittorrent/session.h"
 #include "base/bittorrent/torrent.h"
-#include "base/bittorrent/trackerentry.h"
+#include "base/bittorrent/trackerentrystatus.h"
 #include "base/global.h"
 #include "base/logger.h"
 #include "base/path.h"
@@ -76,9 +76,9 @@
 
 namespace
 {
-    QVector<BitTorrent::TorrentID> extractIDs(const QVector<BitTorrent::Torrent *> &torrents)
+    QList<BitTorrent::TorrentID> extractIDs(const QList<BitTorrent::Torrent *> &torrents)
     {
-        QVector<BitTorrent::TorrentID> torrentIDs;
+        QList<BitTorrent::TorrentID> torrentIDs;
         torrentIDs.reserve(torrents.size());
         for (const BitTorrent::Torrent *torrent : torrents)
             torrentIDs << torrent->id();
@@ -113,12 +113,13 @@ namespace
 #endif
     }
 
-    void removeTorrents(const QVector<BitTorrent::Torrent *> &torrents, const bool isDeleteFileSelected)
+    void removeTorrents(const QList<BitTorrent::Torrent *> &torrents, const bool isDeleteFileSelected)
     {
         auto *session = BitTorrent::Session::instance();
-        const DeleteOption deleteOption = isDeleteFileSelected ? DeleteTorrentAndFiles : DeleteTorrent;
+        const BitTorrent::TorrentRemoveOption removeOption = isDeleteFileSelected
+                ? BitTorrent::TorrentRemoveOption::RemoveContent : BitTorrent::TorrentRemoveOption::KeepContent;
         for (const BitTorrent::Torrent *torrent : torrents)
-            session->deleteTorrent(torrent->id(), deleteOption);
+            session->removeTorrent(torrent->id(), removeOption);
     }
 }
 
@@ -178,10 +179,12 @@ TransferListWidget::TransferListWidget(QWidget *parent, MainWindow *mainWindow)
         setColumnHidden(TransferListModel::TR_INFOHASH_V2, true);
         setColumnHidden(TransferListModel::TR_COMPLETED, true);
         setColumnHidden(TransferListModel::TR_RATIO_LIMIT, true);
+        setColumnHidden(TransferListModel::TR_POPULARITY, true);
         setColumnHidden(TransferListModel::TR_SEEN_COMPLETE_DATE, true);
         setColumnHidden(TransferListModel::TR_LAST_ACTIVITY, true);
         setColumnHidden(TransferListModel::TR_TOTAL_SIZE, true);
         setColumnHidden(TransferListModel::TR_REANNOUNCE, true);
+        setColumnHidden(TransferListModel::TR_PRIVATE, true);
     }
 
     //Ensure that at least one column is visible at all times
@@ -293,11 +296,11 @@ void TransferListWidget::torrentDoubleClicked()
 
     switch (action)
     {
-    case TOGGLE_PAUSE:
-        if (torrent->isPaused())
-            torrent->resume();
+    case TOGGLE_STOP:
+        if (torrent->isStopped())
+            torrent->start();
         else
-            torrent->pause();
+            torrent->stop();
         break;
     case PREVIEW_FILE:
         if (torrentContainsPreviewableFiles(torrent))
@@ -321,22 +324,22 @@ void TransferListWidget::torrentDoubleClicked()
     }
 }
 
-QVector<BitTorrent::Torrent *> TransferListWidget::getSelectedTorrents() const
+QList<BitTorrent::Torrent *> TransferListWidget::getSelectedTorrents() const
 {
     const QModelIndexList selectedRows = selectionModel()->selectedRows();
 
-    QVector<BitTorrent::Torrent *> torrents;
+    QList<BitTorrent::Torrent *> torrents;
     torrents.reserve(selectedRows.size());
     for (const QModelIndex &index : selectedRows)
         torrents << m_listModel->torrentHandle(mapToSource(index));
     return torrents;
 }
 
-QVector<BitTorrent::Torrent *> TransferListWidget::getVisibleTorrents() const
+QList<BitTorrent::Torrent *> TransferListWidget::getVisibleTorrents() const
 {
     const int visibleTorrentsCount = m_sortFilterModel->rowCount();
 
-    QVector<BitTorrent::Torrent *> torrents;
+    QList<BitTorrent::Torrent *> torrents;
     torrents.reserve(visibleTorrentsCount);
     for (int i = 0; i < visibleTorrentsCount; ++i)
         torrents << m_listModel->torrentHandle(mapToSource(m_sortFilterModel->index(i, 0)));
@@ -345,7 +348,7 @@ QVector<BitTorrent::Torrent *> TransferListWidget::getVisibleTorrents() const
 
 void TransferListWidget::setSelectedTorrentsLocation()
 {
-    const QVector<BitTorrent::Torrent *> torrents = getSelectedTorrents();
+    const QList<BitTorrent::Torrent *> torrents = getSelectedTorrents();
     if (torrents.isEmpty())
         return;
 
@@ -357,7 +360,7 @@ void TransferListWidget::setSelectedTorrentsLocation()
     fileDialog->setOptions(QFileDialog::DontConfirmOverwrite | QFileDialog::ShowDirsOnly | QFileDialog::HideNameFilterDetails);
     connect(fileDialog, &QDialog::accepted, this, [this, fileDialog]()
     {
-        const QVector<BitTorrent::Torrent *> torrents = getSelectedTorrents();
+        const QList<BitTorrent::Torrent *> torrents = getSelectedTorrents();
         if (torrents.isEmpty())
             return;
 
@@ -376,66 +379,44 @@ void TransferListWidget::setSelectedTorrentsLocation()
     fileDialog->open();
 }
 
-void TransferListWidget::pauseAllTorrents()
+void TransferListWidget::pauseSession()
 {
-    if (Preferences::instance()->confirmPauseAndResumeAll())
-    {
-        // Show confirmation if user would really like to Pause All
-        const QMessageBox::StandardButton ret = QMessageBox::question(this, tr("Confirm pause")
-                , tr("Would you like to pause all torrents?"), (QMessageBox::Yes | QMessageBox::No));
-
-        if (ret != QMessageBox::Yes)
-            return;
-    }
-
-    for (BitTorrent::Torrent *const torrent : asConst(BitTorrent::Session::instance()->torrents()))
-        torrent->pause();
+    BitTorrent::Session::instance()->pause();
 }
 
-void TransferListWidget::resumeAllTorrents()
+void TransferListWidget::resumeSession()
 {
-    if (Preferences::instance()->confirmPauseAndResumeAll())
-    {
-        // Show confirmation if user would really like to Resume All
-        const QMessageBox::StandardButton ret = QMessageBox::question(this, tr("Confirm resume")
-                , tr("Would you like to resume all torrents?"), (QMessageBox::Yes | QMessageBox::No));
-
-        if (ret != QMessageBox::Yes)
-            return;
-    }
-
-    for (BitTorrent::Torrent *const torrent : asConst(BitTorrent::Session::instance()->torrents()))
-        torrent->resume();
+    BitTorrent::Session::instance()->resume();
 }
 
 void TransferListWidget::startSelectedTorrents()
 {
     for (BitTorrent::Torrent *const torrent : asConst(getSelectedTorrents()))
-        torrent->resume();
+        torrent->start();
 }
 
 void TransferListWidget::forceStartSelectedTorrents()
 {
     for (BitTorrent::Torrent *const torrent : asConst(getSelectedTorrents()))
-        torrent->resume(BitTorrent::TorrentOperatingMode::Forced);
+        torrent->start(BitTorrent::TorrentOperatingMode::Forced);
 }
 
 void TransferListWidget::startVisibleTorrents()
 {
     for (BitTorrent::Torrent *const torrent : asConst(getVisibleTorrents()))
-        torrent->resume();
+        torrent->start();
 }
 
-void TransferListWidget::pauseSelectedTorrents()
+void TransferListWidget::stopSelectedTorrents()
 {
     for (BitTorrent::Torrent *const torrent : asConst(getSelectedTorrents()))
-        torrent->pause();
+        torrent->stop();
 }
 
-void TransferListWidget::pauseVisibleTorrents()
+void TransferListWidget::stopVisibleTorrents()
 {
     for (BitTorrent::Torrent *const torrent : asConst(getVisibleTorrents()))
-        torrent->pause();
+        torrent->stop();
 }
 
 void TransferListWidget::softDeleteSelectedTorrents()
@@ -452,7 +433,7 @@ void TransferListWidget::deleteSelectedTorrents(const bool deleteLocalFiles)
 {
     if (m_mainWindow->currentTabWidget() != this) return;
 
-    const QVector<BitTorrent::Torrent *> torrents = getSelectedTorrents();
+    const QList<BitTorrent::Torrent *> torrents = getSelectedTorrents();
     if (torrents.empty()) return;
 
     if (Preferences::instance()->confirmTorrentDeletion())
@@ -463,7 +444,7 @@ void TransferListWidget::deleteSelectedTorrents(const bool deleteLocalFiles)
         {
             // Some torrents might be removed when waiting for user input, so refetch the torrent list
             // NOTE: this will only work when dialog is modal
-            removeTorrents(getSelectedTorrents(), dialog->isDeleteFileSelected());
+            removeTorrents(getSelectedTorrents(), dialog->isRemoveContentSelected());
         });
         dialog->open();
     }
@@ -475,7 +456,7 @@ void TransferListWidget::deleteSelectedTorrents(const bool deleteLocalFiles)
 
 void TransferListWidget::deleteVisibleTorrents()
 {
-    const QVector<BitTorrent::Torrent *> torrents = getVisibleTorrents();
+    const QList<BitTorrent::Torrent *> torrents = getVisibleTorrents();
     if (torrents.empty()) return;
 
     if (Preferences::instance()->confirmTorrentDeletion())
@@ -486,7 +467,7 @@ void TransferListWidget::deleteVisibleTorrents()
         {
             // Some torrents might be removed when waiting for user input, so refetch the torrent list
             // NOTE: this will only work when dialog is modal
-            removeTorrents(getVisibleTorrents(), dialog->isDeleteFileSelected());
+            removeTorrents(getVisibleTorrents(), dialog->isRemoveContentSelected());
         });
         dialog->open();
     }
@@ -644,7 +625,7 @@ void TransferListWidget::previewSelectedTorrents()
 
 void TransferListWidget::setTorrentOptions()
 {
-    const QVector<BitTorrent::Torrent *> selectedTorrents = getSelectedTorrents();
+    const QList<BitTorrent::Torrent *> selectedTorrents = getSelectedTorrents();
     if (selectedTorrents.empty()) return;
 
     auto *dialog = new TorrentOptionsDialog {this, selectedTorrents};
@@ -696,6 +677,7 @@ void TransferListWidget::displayColumnHeaderMenu()
             continue;
 
         const auto columnName = m_listModel->headerData(i, Qt::Horizontal, Qt::DisplayRole).toString();
+        const QVariant columnToolTip = m_listModel->headerData(i, Qt::Horizontal, Qt::ToolTipRole);
         QAction *action = menu->addAction(columnName, this, [this, i](const bool checked)
         {
             if (!checked && (visibleColumnsCount() <= 1))
@@ -710,6 +692,8 @@ void TransferListWidget::displayColumnHeaderMenu()
         });
         action->setCheckable(true);
         action->setChecked(!isColumnHidden(i));
+        if (!columnToolTip.isNull())
+            action->setToolTip(columnToolTip.toString());
     }
 
     menu->addSeparator();
@@ -778,19 +762,19 @@ void TransferListWidget::askAddTagsForSelection()
 
 void TransferListWidget::editTorrentTrackers()
 {
-    const QVector<BitTorrent::Torrent *> torrents = getSelectedTorrents();
-    QVector<BitTorrent::TrackerEntry> commonTrackers;
+    const QList<BitTorrent::Torrent *> torrents = getSelectedTorrents();
+    QList<BitTorrent::TrackerEntry> commonTrackers;
 
     if (!torrents.empty())
     {
-        commonTrackers = torrents[0]->trackers();
+        for (const BitTorrent::TrackerEntryStatus &status : asConst(torrents[0]->trackers()))
+            commonTrackers.append({.url = status.url, .tier = status.tier});
 
         for (const BitTorrent::Torrent *torrent : torrents)
         {
             QSet<BitTorrent::TrackerEntry> trackerSet;
-
-            for (const BitTorrent::TrackerEntry &entry : asConst(torrent->trackers()))
-                trackerSet.insert(entry);
+            for (const BitTorrent::TrackerEntryStatus &status : asConst(torrent->trackers()))
+                trackerSet.insert({.url = status.url, .tier = status.tier});
 
             commonTrackers.erase(std::remove_if(commonTrackers.begin(), commonTrackers.end()
                 , [&trackerSet](const BitTorrent::TrackerEntry &entry) { return !trackerSet.contains(entry); })
@@ -822,7 +806,7 @@ void TransferListWidget::exportTorrent()
     fileDialog->setOptions(QFileDialog::ShowDirsOnly);
     connect(fileDialog, &QFileDialog::fileSelected, this, [this](const QString &dir)
     {
-        const QVector<BitTorrent::Torrent *> torrents = getSelectedTorrents();
+        const QList<BitTorrent::Torrent *> torrents = getSelectedTorrents();
         if (torrents.isEmpty())
             return;
 
@@ -972,11 +956,11 @@ void TransferListWidget::displayListMenu()
 
     // Create actions
 
-    auto *actionStart = new QAction(UIThemeManager::instance()->getIcon(u"torrent-start"_s, u"media-playback-start"_s), tr("&Resume", "Resume/start the torrent"), listMenu);
+    auto *actionStart = new QAction(UIThemeManager::instance()->getIcon(u"torrent-start"_s, u"media-playback-start"_s), tr("&Start", "Resume/start the torrent"), listMenu);
     connect(actionStart, &QAction::triggered, this, &TransferListWidget::startSelectedTorrents);
-    auto *actionPause = new QAction(UIThemeManager::instance()->getIcon(u"torrent-stop"_s, u"media-playback-pause"_s), tr("&Pause", "Pause the torrent"), listMenu);
-    connect(actionPause, &QAction::triggered, this, &TransferListWidget::pauseSelectedTorrents);
-    auto *actionForceStart = new QAction(UIThemeManager::instance()->getIcon(u"torrent-start-forced"_s, u"media-playback-start"_s), tr("Force Resu&me", "Force Resume/start the torrent"), listMenu);
+    auto *actionStop = new QAction(UIThemeManager::instance()->getIcon(u"torrent-stop"_s, u"media-playback-pause"_s), tr("Sto&p", "Stop the torrent"), listMenu);
+    connect(actionStop, &QAction::triggered, this, &TransferListWidget::stopSelectedTorrents);
+    auto *actionForceStart = new QAction(UIThemeManager::instance()->getIcon(u"torrent-start-forced"_s, u"media-playback-start"_s), tr("Force Star&t", "Force Resume/start the torrent"), listMenu);
     connect(actionForceStart, &QAction::triggered, this, &TransferListWidget::forceStartSelectedTorrents);
     auto *actionDelete = new QAction(UIThemeManager::instance()->getIcon(u"list-remove"_s), tr("&Remove", "Remove the torrent"), listMenu);
     connect(actionDelete, &QAction::triggered, this, &TransferListWidget::softDeleteSelectedTorrents);
@@ -1029,8 +1013,8 @@ void TransferListWidget::displayListMenu()
     connect(actionExportTorrent, &QAction::triggered, this, &TransferListWidget::exportTorrent);
     // End of actions
 
-    // Enable/disable pause/start action given the DL state
-    bool needsPause = false, needsStart = false, needsForce = false, needsPreview = false;
+    // Enable/disable stop/start action given the DL state
+    bool needsStop = false, needsStart = false, needsForce = false, needsPreview = false;
     bool allSameSuperSeeding = true;
     bool superSeedingMode = false;
     bool allSameSequentialDownloadMode = true, allSamePrioFirstlast = true;
@@ -1048,10 +1032,9 @@ void TransferListWidget::displayListMenu()
 
     for (const QModelIndex &index : selectedIndexes)
     {
-        // Get the file name
-        // Get handle and pause the torrent
         const BitTorrent::Torrent *torrent = m_listModel->torrentHandle(mapToSource(index));
-        if (!torrent) continue;
+        if (!torrent)
+            continue;
 
         if (firstCategory.isEmpty() && first)
             firstCategory = torrent->category();
@@ -1108,11 +1091,11 @@ void TransferListWidget::displayListMenu()
         else
             needsStart = true;
 
-        const bool isPaused = torrent->isPaused();
-        if (isPaused)
+        const bool isStopped = torrent->isStopped();
+        if (isStopped)
             needsStart = true;
         else
-            needsPause = true;
+            needsStop = true;
 
         if (torrent->isErrored() || torrent->hasMissingFiles())
         {
@@ -1136,17 +1119,16 @@ void TransferListWidget::displayListMenu()
         if (rechecking)
         {
             needsStart = true;
-            needsPause = true;
+            needsStop = true;
         }
 
-        const bool queued = (BitTorrent::Session::instance()->isQueueingSystemEnabled() && torrent->isQueued());
-
-        if (!isPaused && !rechecking && !queued)
+        const bool queued = torrent->isQueued();
+        if (!isStopped && !rechecking && !queued)
             oneCanForceReannounce = true;
 
         if (oneHasMetadata && oneNotFinished && !allSameSequentialDownloadMode
             && !allSamePrioFirstlast && !allSameSuperSeeding && !allSameCategory
-            && needsStart && needsForce && needsPause && needsPreview && !allSameAutoTMM
+            && needsStart && needsForce && needsStop && needsPreview && !allSameAutoTMM
             && hasInfohashV1 && hasInfohashV2 && oneCanForceReannounce)
         {
             break;
@@ -1155,8 +1137,8 @@ void TransferListWidget::displayListMenu()
 
     if (needsStart)
         listMenu->addAction(actionStart);
-    if (needsPause)
-        listMenu->addAction(actionPause);
+    if (needsStop)
+        listMenu->addAction(actionStop);
     if (needsForce)
         listMenu->addAction(actionForceStart);
     listMenu->addSeparator();
@@ -1210,7 +1192,7 @@ void TransferListWidget::displayListMenu()
     const TagSet tags = BitTorrent::Session::instance()->tags();
     for (const Tag &tag : asConst(tags))
     {
-        auto *action = new TriStateAction(tag.toString(), tagsMenu);
+        auto *action = new TriStateAction(Utils::Gui::tagToWidgetText(tag), tagsMenu);
         action->setCloseOnInteraction(false);
 
         const Qt::CheckState initialState = tagsInAll.contains(tag) ? Qt::Checked
@@ -1268,12 +1250,12 @@ void TransferListWidget::displayListMenu()
         listMenu->addSeparator();
     if (oneHasMetadata)
         listMenu->addAction(actionForceRecheck);
-    // We can not force reannounce torrents that are paused/errored/checking/missing files/queued.
+    // We can not force reannounce torrents that are stopped/errored/checking/missing files/queued.
     // We may already have the tracker list from magnet url. So we can force reannounce torrents without metadata anyway.
     listMenu->addAction(actionForceReannounce);
     actionForceReannounce->setEnabled(oneCanForceReannounce);
     if (!oneCanForceReannounce)
-        actionForceReannounce->setToolTip(tr("Can not force reannounce if torrent is Paused/Queued/Errored/Checking"));
+        actionForceReannounce->setToolTip(tr("Can not force reannounce if torrent is Stopped/Queued/Errored/Checking"));
     listMenu->addSeparator();
     listMenu->addAction(actionOpenDestinationFolder);
     if (BitTorrent::Session::instance()->isQueueingSystemEnabled() && oneNotFinished)
@@ -1350,9 +1332,10 @@ void TransferListWidget::applyFilter(const QString &name, const TransferListMode
     m_sortFilterModel->setFilterRegularExpression(QRegularExpression(pattern, QRegularExpression::CaseInsensitiveOption));
 }
 
-void TransferListWidget::applyStatusFilter(int f)
+void TransferListWidget::applyStatusFilter(const int filterIndex)
 {
-    m_sortFilterModel->setStatusFilter(static_cast<TorrentFilter::Type>(f));
+    const auto filterType = static_cast<TorrentFilter::Type>(filterIndex);
+    m_sortFilterModel->setStatusFilter(((filterType >= TorrentFilter::All) && (filterType < TorrentFilter::_Count)) ? filterType : TorrentFilter::All);
     // Select first item if nothing is selected
     if (selectionModel()->selectedRows(0).empty() && (m_sortFilterModel->rowCount() > 0))
     {

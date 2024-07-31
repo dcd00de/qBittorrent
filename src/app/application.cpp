@@ -1,6 +1,6 @@
 /*
  * Bittorrent Client using Qt and libtorrent.
- * Copyright (C) 2015  Vladimir Golovnev <glassez@yandex.ru>
+ * Copyright (C) 2015-2024  Vladimir Golovnev <glassez@yandex.ru>
  * Copyright (C) 2006  Christophe Dumez
  *
  * This program is free software; you can redistribute it and/or
@@ -140,8 +140,8 @@ namespace
         if (!addTorrentParams.savePath.isEmpty())
             result.append(u"@savePath=" + addTorrentParams.savePath.data());
 
-        if (addTorrentParams.addPaused.has_value())
-            result.append(*addTorrentParams.addPaused ? u"@addPaused=1"_s : u"@addPaused=0"_s);
+        if (addTorrentParams.addStopped.has_value())
+            result.append(*addTorrentParams.addStopped ? u"@addStopped=1"_s : u"@addStopped=0"_s);
 
         if (addTorrentParams.skipChecking)
             result.append(u"@skipChecking"_s);
@@ -180,9 +180,9 @@ namespace
                 continue;
             }
 
-            if (param.startsWith(u"@addPaused="))
+            if (param.startsWith(u"@addStopped="))
             {
-                addTorrentParams.addPaused = (QStringView(param).mid(11).toInt() != 0);
+                addTorrentParams.addStopped = (QStringView(param).mid(11).toInt() != 0);
                 continue;
             }
 
@@ -226,6 +226,7 @@ namespace
 Application::Application(int &argc, char **argv)
     : BaseApplication(argc, argv)
     , m_commandLineArgs(parseCommandLine(Application::arguments()))
+    , m_storeInstanceName(SETTINGS_KEY(u"InstanceName"_s))
     , m_storeFileLoggerEnabled(FILELOGGER_SETTINGS_KEY(u"Enabled"_s))
     , m_storeFileLoggerBackup(FILELOGGER_SETTINGS_KEY(u"Backup"_s))
     , m_storeFileLoggerDeleteOld(FILELOGGER_SETTINGS_KEY(u"DeleteOld"_s))
@@ -250,17 +251,15 @@ Application::Application(int &argc, char **argv)
 #if !defined(DISABLE_GUI)
     setDesktopFileName(u"org.qbittorrent.qBittorrent"_s);
     setQuitOnLastWindowClosed(false);
+    setQuitLockEnabled(false);
     QPixmapCache::setCacheLimit(PIXMAP_CACHE_SIZE);
 #endif
 
     Logger::initInstance();
 
     const auto portableProfilePath = Path(QCoreApplication::applicationDirPath()) / DEFAULT_PORTABLE_MODE_PROFILE_DIR;
-    const bool portableModeEnabled = m_commandLineArgs.profileDir.isEmpty() && portableProfilePath.exists();
-
-    const Path profileDir = portableModeEnabled
-        ? portableProfilePath
-        : m_commandLineArgs.profileDir;
+    const bool portableModeEnabled = m_commandLineArgs.profileDir.isEmpty() && Utils::Fs::isDir(portableProfilePath);
+    const Path profileDir = portableModeEnabled ? portableProfilePath : m_commandLineArgs.profileDir;
     Profile::initInstance(profileDir, m_commandLineArgs.configurationName,
                         (m_commandLineArgs.relativeFastresumePaths || portableModeEnabled));
 
@@ -358,6 +357,23 @@ void Application::setTorrentAddedNotificationsEnabled(const bool value)
 const QBtCommandLineParameters &Application::commandLineArgs() const
 {
     return m_commandLineArgs;
+}
+
+QString Application::instanceName() const
+{
+    return m_storeInstanceName;
+}
+
+void Application::setInstanceName(const QString &name)
+{
+    if (name == instanceName())
+        return;
+
+    m_storeInstanceName = name;
+#ifndef DISABLE_GUI
+    if (MainWindow *mw = mainWindow())
+        mw->setTitleSuffix(name);
+#endif
 }
 
 int Application::memoryWorkingSetLimit() const
@@ -662,6 +678,24 @@ void Application::sendNotificationEmail(const BitTorrent::Torrent *torrent)
                      content);
 }
 
+void Application::sendTestEmail() const
+{
+    const Preferences *pref = Preferences::instance();
+    if (pref->isMailNotificationEnabled())
+    {
+        // Prepare mail content
+        const QString content = tr("This is a test email.") + u'\n'
+            + tr("Thank you for using qBittorrent.") + u'\n';
+
+        // Send the notification email
+        auto *smtp = new Net::Smtp();
+        smtp->sendMail(pref->getMailNotificationSender(),
+                        pref->getMailNotificationEmail(),
+                        tr("Test email"),
+                        content);
+    }
+}
+
 void Application::torrentAdded(const BitTorrent::Torrent *torrent) const
 {
     const Preferences *pref = Preferences::instance();
@@ -799,7 +833,7 @@ int Application::exec()
     m_desktopIntegration = new DesktopIntegration;
     m_desktopIntegration->setToolTip(tr("Loading torrents..."));
 #ifndef Q_OS_MACOS
-    auto *desktopIntegrationMenu = new QMenu;
+    auto *desktopIntegrationMenu = m_desktopIntegration->menu();
     auto *actionExit = new QAction(tr("E&xit"), desktopIntegrationMenu);
     actionExit->setIcon(UIThemeManager::instance()->getIcon(u"application-exit"_s));
     actionExit->setMenuRole(QAction::QuitRole);
@@ -809,8 +843,6 @@ int Application::exec()
         QApplication::exit();
     });
     desktopIntegrationMenu->addAction(actionExit);
-
-    m_desktopIntegration->setMenu(desktopIntegrationMenu);
 
     const bool isHidden = m_desktopIntegration->isActive() && (startUpWindowState() == WindowState::Hidden);
 #else
@@ -880,7 +912,8 @@ int Application::exec()
         const WindowState windowState = (m_startupProgressDialog->windowState() & Qt::WindowMinimized)
                 ? WindowState::Minimized : WindowState::Normal;
 #endif
-        m_window = new MainWindow(this, windowState);
+        m_window = new MainWindow(this, windowState, instanceName());
+
         delete m_startupProgressDialog;
 #endif // DISABLE_GUI
 

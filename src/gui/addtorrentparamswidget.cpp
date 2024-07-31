@@ -144,9 +144,10 @@ void AddTorrentParamsWidget::setAddTorrentParams(BitTorrent::AddTorrentParams ad
 BitTorrent::AddTorrentParams AddTorrentParamsWidget::addTorrentParams() const
 {
     BitTorrent::AddTorrentParams addTorrentParams = cleanParams(m_addTorrentParams);
-    addTorrentParams.ratioLimit = m_ui->torrentShareLimitsWidget->ratioLimit();
-    addTorrentParams.seedingTimeLimit = m_ui->torrentShareLimitsWidget->seedingTimeLimit();
-    addTorrentParams.inactiveSeedingTimeLimit = m_ui->torrentShareLimitsWidget->inactiveSeedingTimeLimit();
+    addTorrentParams.ratioLimit = m_ui->torrentShareLimitsWidget->ratioLimit().value();
+    addTorrentParams.seedingTimeLimit = m_ui->torrentShareLimitsWidget->seedingTimeLimit().value();
+    addTorrentParams.inactiveSeedingTimeLimit = m_ui->torrentShareLimitsWidget->inactiveSeedingTimeLimit().value();
+    addTorrentParams.shareLimitAction = m_ui->torrentShareLimitsWidget->shareLimitAction().value();
 
     return addTorrentParams;
 }
@@ -239,15 +240,15 @@ void AddTorrentParamsWidget::populate()
     m_ui->tagsLineEdit->setText(Utils::String::joinIntoString(m_addTorrentParams.tags, u", "_s));
 
     m_ui->startTorrentComboBox->disconnect(this);
-    m_ui->startTorrentComboBox->setCurrentIndex(m_addTorrentParams.addPaused
-            ? m_ui->startTorrentComboBox->findData(!*m_addTorrentParams.addPaused) : 0);
+    m_ui->startTorrentComboBox->setCurrentIndex(m_addTorrentParams.addStopped
+                                                    ? m_ui->startTorrentComboBox->findData(!*m_addTorrentParams.addStopped) : 0);
     connect(m_ui->startTorrentComboBox, &QComboBox::currentIndexChanged, this, [this]
     {
         const QVariant data = m_ui->startTorrentComboBox->currentData();
         if (!data.isValid())
-            m_addTorrentParams.addPaused = std::nullopt;
+            m_addTorrentParams.addStopped = std::nullopt;
         else
-            m_addTorrentParams.addPaused = !data.toBool();
+            m_addTorrentParams.addStopped = !data.toBool();
     });
 
     m_ui->skipCheckingCheckBox->disconnect(this);
@@ -269,8 +270,10 @@ void AddTorrentParamsWidget::populate()
             m_addTorrentParams.addToQueueTop = data.toBool();
     });
 
-    m_ui->torrentShareLimitsWidget->setTorrentShareLimits(m_addTorrentParams.ratioLimit
-            , m_addTorrentParams.seedingTimeLimit, m_addTorrentParams.inactiveSeedingTimeLimit);
+    m_ui->torrentShareLimitsWidget->setRatioLimit(m_addTorrentParams.ratioLimit);
+    m_ui->torrentShareLimitsWidget->setSeedingTimeLimit(m_addTorrentParams.seedingTimeLimit);
+    m_ui->torrentShareLimitsWidget->setInactiveSeedingTimeLimit(m_addTorrentParams.inactiveSeedingTimeLimit);
+    m_ui->torrentShareLimitsWidget->setShareLimitAction(m_addTorrentParams.shareLimitAction);
 }
 
 void AddTorrentParamsWidget::loadCustomSavePathOptions()

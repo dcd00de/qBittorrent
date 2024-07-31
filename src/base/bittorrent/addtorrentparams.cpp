@@ -1,6 +1,6 @@
 /*
  * Bittorrent Client using Qt and libtorrent.
- * Copyright (C) 2015-2023  Vladimir Golovnev <glassez@yandex.ru>
+ * Copyright (C) 2015-2024  Vladimir Golovnev <glassez@yandex.ru>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -32,6 +32,7 @@
 #include <QJsonObject>
 #include <QJsonValue>
 
+#include "base/utils/sslkey.h"
 #include "base/utils/string.h"
 
 const QString PARAM_CATEGORY = u"category"_s;
@@ -50,7 +51,11 @@ const QString PARAM_UPLOADLIMIT = u"upload_limit"_s;
 const QString PARAM_DOWNLOADLIMIT = u"download_limit"_s;
 const QString PARAM_SEEDINGTIMELIMIT = u"seeding_time_limit"_s;
 const QString PARAM_INACTIVESEEDINGTIMELIMIT = u"inactive_seeding_time_limit"_s;
+const QString PARAM_SHARELIMITACTION = u"share_limit_action"_s;
 const QString PARAM_RATIOLIMIT = u"ratio_limit"_s;
+const QString PARAM_SSL_CERTIFICATE = u"ssl_certificate"_s;
+const QString PARAM_SSL_PRIVATEKEY = u"ssl_private_key"_s;
+const QString PARAM_SSL_DHPARAMS = u"ssl_dh_params"_s;
 
 namespace
 {
@@ -92,10 +97,10 @@ namespace
     }
 
     template <typename Enum>
-    Enum getEnum(const QJsonObject &jsonObj, const QString &key)
+    Enum getEnum(const QJsonObject &jsonObj, const QString &key, const Enum defaultValue = {})
     {
         const QJsonValue jsonVal = jsonObj.value(key);
-        return Utils::String::toEnum<Enum>(jsonVal.toString(), {});
+        return Utils::String::toEnum<Enum>(jsonVal.toString(), defaultValue);
     }
 }
 
@@ -111,7 +116,7 @@ BitTorrent::AddTorrentParams BitTorrent::parseAddTorrentParams(const QJsonObject
         .downloadPath = Path(jsonObj.value(PARAM_DOWNLOADPATH).toString()),
         .addForced = (getEnum<TorrentOperatingMode>(jsonObj, PARAM_OPERATINGMODE) == TorrentOperatingMode::Forced),
         .addToQueueTop = getOptionalBool(jsonObj, PARAM_QUEUETOP),
-        .addPaused = getOptionalBool(jsonObj, PARAM_STOPPED),
+        .addStopped = getOptionalBool(jsonObj, PARAM_STOPPED),
         .stopCondition = getOptionalEnum<Torrent::StopCondition>(jsonObj, PARAM_STOPCONDITION),
         .filePaths = {},
         .filePriorities = {},
@@ -122,7 +127,14 @@ BitTorrent::AddTorrentParams BitTorrent::parseAddTorrentParams(const QJsonObject
         .downloadLimit = jsonObj.value(PARAM_DOWNLOADLIMIT).toInt(-1),
         .seedingTimeLimit = jsonObj.value(PARAM_SEEDINGTIMELIMIT).toInt(Torrent::USE_GLOBAL_SEEDING_TIME),
         .inactiveSeedingTimeLimit = jsonObj.value(PARAM_INACTIVESEEDINGTIMELIMIT).toInt(Torrent::USE_GLOBAL_INACTIVE_SEEDING_TIME),
-        .ratioLimit = jsonObj.value(PARAM_RATIOLIMIT).toDouble(Torrent::USE_GLOBAL_RATIO)
+        .ratioLimit = jsonObj.value(PARAM_RATIOLIMIT).toDouble(Torrent::USE_GLOBAL_RATIO),
+        .shareLimitAction = getEnum<ShareLimitAction>(jsonObj, PARAM_SHARELIMITACTION, ShareLimitAction::Default),
+        .sslParameters =
+        {
+            .certificate = QSslCertificate(jsonObj.value(PARAM_SSL_CERTIFICATE).toString().toLatin1()),
+            .privateKey = Utils::SSLKey::load(jsonObj.value(PARAM_SSL_PRIVATEKEY).toString().toLatin1()),
+            .dhParams = jsonObj.value(PARAM_SSL_DHPARAMS).toString().toLatin1()
+        }
     };
     return params;
 }
@@ -136,19 +148,23 @@ QJsonObject BitTorrent::serializeAddTorrentParams(const AddTorrentParams &params
         {PARAM_SAVEPATH, params.savePath.data()},
         {PARAM_DOWNLOADPATH, params.downloadPath.data()},
         {PARAM_OPERATINGMODE, Utils::String::fromEnum(params.addForced
-                                                          ? TorrentOperatingMode::Forced : TorrentOperatingMode::AutoManaged)},
+                ? TorrentOperatingMode::Forced : TorrentOperatingMode::AutoManaged)},
         {PARAM_SKIPCHECKING, params.skipChecking},
         {PARAM_UPLOADLIMIT, params.uploadLimit},
         {PARAM_DOWNLOADLIMIT, params.downloadLimit},
         {PARAM_SEEDINGTIMELIMIT, params.seedingTimeLimit},
         {PARAM_INACTIVESEEDINGTIMELIMIT, params.inactiveSeedingTimeLimit},
-        {PARAM_RATIOLIMIT, params.ratioLimit}
+        {PARAM_SHARELIMITACTION, Utils::String::fromEnum(params.shareLimitAction)},
+        {PARAM_RATIOLIMIT, params.ratioLimit},
+        {PARAM_SSL_CERTIFICATE, QString::fromLatin1(params.sslParameters.certificate.toPem())},
+        {PARAM_SSL_PRIVATEKEY, QString::fromLatin1(params.sslParameters.privateKey.toPem())},
+        {PARAM_SSL_DHPARAMS, QString::fromLatin1(params.sslParameters.dhParams)}
     };
 
     if (params.addToQueueTop)
         jsonObj[PARAM_QUEUETOP] = *params.addToQueueTop;
-    if (params.addPaused)
-        jsonObj[PARAM_STOPPED] = *params.addPaused;
+    if (params.addStopped)
+        jsonObj[PARAM_STOPPED] = *params.addStopped;
     if (params.stopCondition)
         jsonObj[PARAM_STOPCONDITION] = Utils::String::fromEnum(*params.stopCondition);
     if (params.contentLayout)

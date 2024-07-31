@@ -32,11 +32,16 @@
 #include <QtContainerFwd>
 #include <QHash>
 
-#include "base/bittorrent/trackerentry.h"
 #include "base/path.h"
 #include "basefilterwidget.h"
 
 class TransferListWidget;
+
+namespace BitTorrent
+{
+    struct TrackerEntry;
+    struct TrackerEntryStatus;
+}
 
 namespace Net
 {
@@ -52,11 +57,11 @@ public:
     TrackersFilterWidget(QWidget *parent, TransferListWidget *transferList, bool downloadFavicon);
     ~TrackersFilterWidget() override;
 
-    void addTrackers(const BitTorrent::Torrent *torrent, const QVector<BitTorrent::TrackerEntry> &trackers);
+    void addTrackers(const BitTorrent::Torrent *torrent, const QList<BitTorrent::TrackerEntry> &trackers);
     void removeTrackers(const BitTorrent::Torrent *torrent, const QStringList &trackers);
     void refreshTrackers(const BitTorrent::Torrent *torrent);
-    void handleTrackerEntriesUpdated(const BitTorrent::Torrent *torrent
-            , const QHash<QString, BitTorrent::TrackerEntry> &updatedTrackerEntries);
+    void handleTrackerStatusesUpdated(const BitTorrent::Torrent *torrent
+            , const QHash<QString, BitTorrent::TrackerEntryStatus> &updatedTrackers);
     void setDownloadTrackerFavicon(bool value);
 
 private slots:
@@ -67,12 +72,12 @@ private:
     // No need to redeclare them here as slots.
     void showMenu() override;
     void applyFilter(int row) override;
-    void handleTorrentsLoaded(const QVector<BitTorrent::Torrent *> &torrents) override;
+    void handleTorrentsLoaded(const QList<BitTorrent::Torrent *> &torrents) override;
     void torrentAboutToBeDeleted(BitTorrent::Torrent *torrent) override;
 
     void onRemoveTrackerTriggered();
 
-    void addItems(const QString &trackerURL, const QVector<BitTorrent::TorrentID> &torrents);
+    void addItems(const QString &trackerURL, const QList<BitTorrent::TorrentID> &torrents);
     void removeItem(const QString &trackerURL, const BitTorrent::TorrentID &id);
     QString trackerFromRow(int row) const;
     int rowFromTracker(const QString &tracker) const;

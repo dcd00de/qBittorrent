@@ -1,6 +1,6 @@
 /*
  * Bittorrent Client using Qt and libtorrent.
- * Copyright (C) 2022-2023  Vladimir Golovnev <glassez@yandex.ru>
+ * Copyright (C) 2022-2024  Vladimir Golovnev <glassez@yandex.ru>
  * Copyright (C) 2006-2012  Christophe Dumez <chris@qbittorrent.org>
  *
  * This program is free software; you can redistribute it and/or
@@ -37,17 +37,12 @@
 #include <QPointer>
 #include <QScopeGuard>
 
-#if defined(Q_OS_WIN)
-#include <windows.h>
-#include <shellapi.h>
-#else
-#include <QMimeDatabase>
-#include <QMimeType>
-#endif
-
-#if defined Q_OS_WIN || defined Q_OS_MACOS
+#if defined(Q_OS_MACOS)
 #define QBT_PIXMAP_CACHE_FOR_FILE_ICONS
 #include <QPixmapCache>
+#elif !defined(Q_OS_WIN)
+#include <QMimeDatabase>
+#include <QMimeType>
 #endif
 
 #include "base/bittorrent/downloadpriority.h"
@@ -116,27 +111,8 @@ namespace
     };
 #endif // QBT_PIXMAP_CACHE_FOR_FILE_ICONS
 
-#if defined(Q_OS_WIN)
-    // See QTBUG-25319 for explanation why this is required
-    class WinShellFileIconProvider final : public CachingFileIconProvider
-    {
-        QPixmap pixmapForExtension(const QString &ext) const override
-        {
-            const std::wstring extWStr = QString(u'.' + ext).toStdWString();
-
-            SHFILEINFOW sfi {};
-            const HRESULT hr = ::SHGetFileInfoW(extWStr.c_str(),
-                FILE_ATTRIBUTE_NORMAL, &sfi, sizeof(sfi), (SHGFI_ICON | SHGFI_USEFILEATTRIBUTES));
-            if (FAILED(hr))
-                return {};
-
-            const auto iconPixmap = QPixmap::fromImage(QImage::fromHICON(sfi.hIcon));
-            ::DestroyIcon(sfi.hIcon);
-            return iconPixmap;
-        }
-    };
-#elif defined(Q_OS_MACOS)
-    // There is a similar bug on macOS, to be reported to Qt
+#if defined(Q_OS_MACOS)
+    // There is a bug on macOS, to be reported to Qt
     // https://github.com/qbittorrent/qBittorrent/pull/6156#issuecomment-316302615
     class MacFileIconProvider final : public CachingFileIconProvider
     {
@@ -145,7 +121,7 @@ namespace
             return MacUtils::pixmapForExtension(ext, QSize(32, 32));
         }
     };
-#else
+#elif !defined(Q_OS_WIN)
     /**
      * @brief Tests whether QFileIconProvider actually works
      *
@@ -187,9 +163,9 @@ namespace
 
 TorrentContentModel::TorrentContentModel(QObject *parent)
     : QAbstractItemModel(parent)
-    , m_rootItem(new TorrentContentModelFolder(QVector<QString>({ tr("Name"), tr("Total Size"), tr("Progress"), tr("Download Priority"), tr("Remaining"), tr("Availability") })))
+    , m_rootItem(new TorrentContentModelFolder(QList<QString>({ tr("Name"), tr("Total Size"), tr("Progress"), tr("Download Priority"), tr("Remaining"), tr("Availability") })))
 #if defined(Q_OS_WIN)
-    , m_fileIconProvider {new WinShellFileIconProvider}
+    , m_fileIconProvider {new QFileIconProvider}
 #elif defined(Q_OS_MACOS)
     , m_fileIconProvider {new MacFileIconProvider}
 #else
@@ -209,7 +185,7 @@ void TorrentContentModel::updateFilesProgress()
 {
     Q_ASSERT(m_contentHandler && m_contentHandler->hasMetadata());
 
-    const QVector<qreal> &filesProgress = m_contentHandler->filesProgress();
+    const QList<qreal> &filesProgress = m_contentHandler->filesProgress();
     Q_ASSERT(m_filesIndex.size() == filesProgress.size());
     // XXX: Why is this necessary?
     if (m_filesIndex.size() != filesProgress.size()) [[unlikely]]
@@ -226,7 +202,7 @@ void TorrentContentModel::updateFilesPriorities()
 {
     Q_ASSERT(m_contentHandler && m_contentHandler->hasMetadata());
 
-    const QVector<BitTorrent::DownloadPriority> fprio = m_contentHandler->filePriorities();
+    const QList<BitTorrent::DownloadPriority> fprio = m_contentHandler->filePriorities();
     Q_ASSERT(m_filesIndex.size() == fprio.size());
     // XXX: Why is this necessary?
     if (m_filesIndex.size() != fprio.size())
@@ -241,7 +217,7 @@ void TorrentContentModel::updateFilesAvailability()
     Q_ASSERT(m_contentHandler && m_contentHandler->hasMetadata());
 
     using HandlerPtr = QPointer<BitTorrent::TorrentContentHandler>;
-    m_contentHandler->fetchAvailableFileFractions([this, handler = HandlerPtr(m_contentHandler)](const QVector<qreal> &availableFileFractions)
+    m_contentHandler->fetchAvailableFileFractions([this, handler = HandlerPtr(m_contentHandler)](const QList<qreal> &availableFileFractions)
     {
         if (handler != m_contentHandler)
             return;
@@ -274,7 +250,7 @@ bool TorrentContentModel::setItemPriority(const QModelIndex &index, BitTorrent::
     m_rootItem->recalculateProgress();
     m_rootItem->recalculateAvailability();
 
-    const QVector<ColumnInterval> columns =
+    const QList<ColumnInterval> columns =
     {
         {TorrentContentModelItem::COL_NAME, TorrentContentModelItem::COL_NAME},
         {TorrentContentModelItem::COL_PRIO, TorrentContentModelItem::COL_PRIO}
@@ -284,9 +260,9 @@ bool TorrentContentModel::setItemPriority(const QModelIndex &index, BitTorrent::
     return true;
 }
 
-QVector<BitTorrent::DownloadPriority> TorrentContentModel::getFilePriorities() const
+QList<BitTorrent::DownloadPriority> TorrentContentModel::getFilePriorities() const
 {
-    QVector<BitTorrent::DownloadPriority> prio;
+    QList<BitTorrent::DownloadPriority> prio;
     prio.reserve(m_filesIndex.size());
     for (const TorrentContentModelFile *file : asConst(m_filesIndex))
         prio.push_back(file->priority());
@@ -547,7 +523,7 @@ void TorrentContentModel::populate()
     m_filesIndex.reserve(filesCount);
 
     QHash<TorrentContentModelFolder *, QHash<QString, TorrentContentModelFolder *>> folderMap;
-    QVector<QString> lastParentPath;
+    QList<QString> lastParentPath;
     TorrentContentModelFolder *lastParent = m_rootItem;
     // Iterate over files
     for (int i = 0; i < filesCount; ++i)
@@ -626,7 +602,7 @@ void TorrentContentModel::refresh()
         updateFilesPriorities();
         updateFilesAvailability();
 
-        const QVector<ColumnInterval> columns =
+        const QList<ColumnInterval> columns =
         {
             {TorrentContentModelItem::COL_NAME, TorrentContentModelItem::COL_NAME},
             {TorrentContentModelItem::COL_PROGRESS, TorrentContentModelItem::COL_PROGRESS},
@@ -643,7 +619,7 @@ void TorrentContentModel::refresh()
     }
 }
 
-void TorrentContentModel::notifySubtreeUpdated(const QModelIndex &index, const QVector<ColumnInterval> &columns)
+void TorrentContentModel::notifySubtreeUpdated(const QModelIndex &index, const QList<ColumnInterval> &columns)
 {
     // For best performance, `columns` entries should be arranged from left to right
 
@@ -663,7 +639,7 @@ void TorrentContentModel::notifySubtreeUpdated(const QModelIndex &index, const Q
     }
 
     // propagate down the model
-    QVector<QModelIndex> parentIndexes;
+    QList<QModelIndex> parentIndexes;
 
     if (hasChildren(index))
         parentIndexes.push_back(index);
