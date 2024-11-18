@@ -1,6 +1,6 @@
 /*
  * Bittorrent Client using Qt and libtorrent.
- * Copyright (C) 2021  Mike Tzou (Chocobo1)
+ * Copyright (C) 2024  sledgehammer999 <hammered999@gmail.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -26,22 +26,31 @@
  * exception statement from your version.
  */
 
-#pragma once
+"use strict";
 
-#define QBT_VERSION_MAJOR 5
-#define QBT_VERSION_MINOR 0
-#define QBT_VERSION_BUGFIX 2
-#define QBT_VERSION_BUILD 0
-#define QBT_VERSION_STATUS ""  // Should be empty for stable releases!
+window.qBittorrent ??= {};
+window.qBittorrent.ColorScheme ??= (() => {
+    const exports = () => {
+        return {
+            update,
+        };
+    };
 
-#define QBT__STRINGIFY(x) #x
-#define QBT_STRINGIFY(x) QBT__STRINGIFY(x)
+    const LocalPreferences = new window.qBittorrent.LocalPreferences.LocalPreferencesClass();
+    const colorSchemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
 
-#if (QBT_VERSION_BUILD != 0)
-#define PROJECT_VERSION QBT_STRINGIFY(QBT_VERSION_MAJOR.QBT_VERSION_MINOR.QBT_VERSION_BUGFIX.QBT_VERSION_BUILD) QBT_VERSION_STATUS
-#else
-#define PROJECT_VERSION QBT_STRINGIFY(QBT_VERSION_MAJOR.QBT_VERSION_MINOR.QBT_VERSION_BUGFIX) QBT_VERSION_STATUS
-#endif
+    const update = () => {
+        const root = document.documentElement;
+        const colorScheme = LocalPreferences.get("color_scheme");
+        const validScheme = (colorScheme === "light") || (colorScheme === "dark");
+        const isDark = colorSchemeQuery.matches;
+        root.classList.toggle("dark", ((!validScheme && isDark) || (colorScheme === "dark")));
+    };
 
-#define QBT_VERSION "v" PROJECT_VERSION
-#define QBT_VERSION_2 PROJECT_VERSION
+    colorSchemeQuery.addEventListener("change", update);
+
+    return exports();
+})();
+Object.freeze(window.qBittorrent.ColorScheme);
+
+window.qBittorrent.ColorScheme.update();
