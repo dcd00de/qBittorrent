@@ -309,7 +309,7 @@
     </message>
     <message>
         <source>Free space: %1</source>
-        <translation>Свободно: %1</translation>
+        <translation>Свободное место: %1</translation>
     </message>
     <message>
         <source>Torrent inactivity timer must be greater than 0.</source>
@@ -1693,7 +1693,7 @@ Use ';' to split multiple entries. Can use wildcard '*'.</source>
     </message>
     <message>
         <source>Resets to default if empty</source>
-        <translation>Сброс на стандрат, если пусто</translation>
+        <translation>Сбрасывается на стандартное, если пусто</translation>
     </message>
     <message>
         <source>Perform hostname lookup via proxy</source>
@@ -1729,7 +1729,7 @@ Use ';' to split multiple entries. Can use wildcard '*'.</source>
     </message>
     <message>
         <source>Enable Mark-of-the-Web (MOTW) for downloaded files (require macOS or Windows):</source>
-        <translation>Ставить веб-метку (MOTW) на загруженные файлы (в macOS и Windows):</translation>
+        <translation>Ставить веб-метку (MOTW) на файлы загрузок (в macOS и Windows):</translation>
     </message>
     <message>
         <source> sec</source>
@@ -3931,7 +3931,7 @@ Use ';' to split multiple entries. Can use wildcard '*'.</source>
     </message>
     <message>
         <source>Season number is a mandatory non-zero value</source>
-        <translation>Номер сезона должен иметь ненулевое значение</translation>
+        <translation>Номер сезона должен быть ненулевым значением</translation>
     </message>
     <message>
         <source>Never</source>
